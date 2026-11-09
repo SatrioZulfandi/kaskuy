@@ -19,7 +19,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
   return (
     <View style={styles.container}>
-      <BatikPattern opacity={0.04} color="#000000" />
+      <BatikPattern opacity={0.07} color="#0052CC" />
       <View style={styles.iconCircle}>
         <Icon name={icon} size={32} color="#0066FF" />
       </View>

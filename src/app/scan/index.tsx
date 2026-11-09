@@ -1,12 +1,13 @@
 // src/app/scan/index.tsx
 import * as ImagePicker from 'expo-image-picker';
 import * as OcrModule from 'expo-mlkit-ocr';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Platform,
   Pressable,
   SafeAreaView,
@@ -47,6 +48,10 @@ export default function ScanScreen() {
   const [scanResultId, setScanResultId] = useState<number | null>(null);
   const [parsed, setParsed] = useState<ParsedReceipt | null>(null);
   const [durationMs, setDurationMs] = useState<number>(0);
+  const [isOpeningPicker, setIsOpeningPicker] = useState(false);
+  const hasOpenedPicker = useRef(false);
+  const pickerBusy = useRef(false);
+  const screenFocused = useRef(false);
 
   // Form states for confirmation
   const [merchant, setMerchant] = useState('');
@@ -59,7 +64,7 @@ export default function ScanScreen() {
   const [note, setNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const initOptions = async () => {
+  const initOptions = useCallback(async () => {
     try {
       const book = await getDefaultBook();
       if (!book) return;
@@ -75,9 +80,12 @@ export default function ScanScreen() {
     } catch (err) {
       console.error('Failed to init options:', err);
     }
-  };
+  }, []);
 
-  const processImage = async (uri: string) => {
+  const processImage = useCallback(async (uri: string) => {
+    setParsed(null);
+    setScanResultId(null);
+    setDate(getTodayDateString());
     setImageUri(uri);
     setIsProcessing(true);
     await initOptions();
@@ -116,16 +124,49 @@ export default function ScanScreen() {
           : Haptics.NotificationFeedbackType.Warning
       );
     } catch (err: any) {
+      setImageUri(null);
+      setParsed(null);
+      setScanResultId(null);
       Alert.alert('Gagal Memproses OCR', err?.message || 'Pastikan foto struk jelas.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [initOptions]);
 
-  const pickImage = async (source: 'camera' | 'gallery') => {
+  const pickImage = useCallback(async (source: 'camera' | 'gallery') => {
+    if (pickerBusy.current) return;
+    hasOpenedPicker.current = true;
+    pickerBusy.current = true;
+    setIsOpeningPicker(true);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (source === 'camera' && Platform.OS !== 'web') {
+        let permission = await ImagePicker.getCameraPermissionsAsync();
+        if (!permission.granted && permission.canAskAgain) {
+          permission = await ImagePicker.requestCameraPermissionsAsync();
+        }
+        if (!screenFocused.current) return;
+        if (!permission.granted) {
+          Alert.alert(
+            'Izin Kamera Diperlukan',
+            'Izinkan akses kamera untuk memotret struk, atau pilih foto dari galeri.',
+            [
+              { text: 'Batal', style: 'cancel' },
+              {
+                text: 'Buka Pengaturan',
+                onPress: () => {
+                  void Linking.openSettings().catch(() => {
+                    Alert.alert('Gagal Membuka Pengaturan', 'Buka pengaturan izin kamera secara manual.');
+                  });
+                },
+              },
+            ]
+          );
+          return;
+        }
+      }
+
       const options: ImagePicker.ImagePickerOptions = {
         mediaTypes: ['images'],
         allowsEditing: true,
@@ -137,13 +178,34 @@ export default function ScanScreen() {
           ? await ImagePicker.launchCameraAsync(options)
           : await ImagePicker.launchImageLibraryAsync(options);
 
-      if (!res.canceled && res.assets[0]?.uri) {
-        processImage(res.assets[0].uri);
+      if (screenFocused.current && !res.canceled && res.assets[0]?.uri) {
+        await processImage(res.assets[0].uri);
       }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Gagal membuka kamera/galeri');
+    } finally {
+      pickerBusy.current = false;
+      setIsOpeningPicker(false);
     }
-  };
+  }, [processImage]);
+
+  useFocusEffect(
+    useCallback(() => {
+      screenFocused.current = true;
+      // Let the scan modal finish opening before presenting the native camera.
+      // Web browsers require a direct button press instead of automatic opening.
+      const timeout = Platform.OS !== 'web' && !hasOpenedPicker.current
+        ? setTimeout(() => {
+            if (!hasOpenedPicker.current) void pickImage('camera');
+          }, 350)
+        : undefined;
+
+      return () => {
+        screenFocused.current = false;
+        if (timeout !== undefined) clearTimeout(timeout);
+      };
+    }, [pickImage])
+  );
 
   const handleSaveTransaction = async () => {
     if (!total || isNaN(Number(total)) || Number(total) <= 0) {
@@ -247,6 +309,9 @@ export default function ScanScreen() {
           <View style={styles.introWrap}>
             <View style={styles.actionButtonsRow}>
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Buka kamera untuk memotret struk"
+                disabled={isOpeningPicker}
                 onPress={() => pickImage('camera')}
                 style={({ pressed }) => [
                   styles.captureCard,
@@ -261,6 +326,9 @@ export default function ScanScreen() {
               </Pressable>
 
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Pilih foto struk dari galeri"
+                disabled={isOpeningPicker}
                 onPress={() => pickImage('gallery')}
                 style={({ pressed }) => [
                   styles.captureCard,
@@ -277,7 +345,8 @@ export default function ScanScreen() {
 
             {/* Petunjuk Riset */}
             <View style={styles.tipsCard}>
-              <Text style={styles.tipsHeading}>💡 Tips Akurasi Maksimal</Text>
+              <Text style={styles.tipsHeading}>Tips Akurasi Maksimal</Text>
+              <Text style={styles.tipsItem}>• Untuk memilih galeri, tutup kamera lalu tekan Pilih Galeri di halaman ini.</Text>
               <Text style={styles.tipsItem}>• Pastikan pencahayaan cukup dan struk tidak terlipat.</Text>
               <Text style={styles.tipsItem}>• Posisikan kamera sejajar tegak lurus dengan struk.</Text>
               <Text style={styles.tipsItem}>• Gunakan fitur crop untuk memperjelas area total & rincian.</Text>
@@ -441,6 +510,8 @@ export default function ScanScreen() {
                   onPress={() => {
                     setImageUri(null);
                     setParsed(null);
+                    setScanResultId(null);
+                    void pickImage('camera');
                   }}
                   size="md"
                   style={{ marginTop: 10 }}
@@ -509,11 +580,10 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   actionButtonsRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 14,
   },
   captureCard: {
-    flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
     padding: 20,

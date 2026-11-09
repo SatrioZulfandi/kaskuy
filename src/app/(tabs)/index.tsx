@@ -138,9 +138,6 @@ export default function HomeScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.heroGradient, { paddingTop: topInset }]}
         >
-          {/* Subtle Batik Kawung pattern */}
-          <BatikPattern opacity={0.07} color="#FFFFFF" />
-
           {/* Top Row: Date Navigator & Book badge */}
           <View style={styles.topBar}>
             <View style={styles.dateNavigator}>
@@ -179,6 +176,7 @@ export default function HomeScreen() {
 
           {/* Balance & Income/Expense Summary */}
           <View style={styles.summaryCard}>
+            <BatikPattern opacity={0.1} color="#FFFFFF" />
             <View style={styles.balanceHeader}>
               <Text style={styles.balanceSubtext}>Total Saldo Keseluruhan</Text>
             </View>
@@ -192,9 +190,9 @@ export default function HomeScreen() {
               {/* Income */}
               <View style={styles.flowItem}>
                 <View style={[styles.flowIconBadge, styles.flowIncomeBadge]}>
-                  <Icon name="arrowUp" size={14} color="#00C48C" strokeWidth={2.5} />
+                  <Icon name="arrowUp" size={14} color="#059669" strokeWidth={2.5} />
                 </View>
-                <View>
+                <View style={styles.flowTextWrap}>
                   <Text style={styles.flowLabel}>Pemasukan</Text>
                   <AmountDisplay
                     amount={summary.income}
@@ -208,9 +206,9 @@ export default function HomeScreen() {
               {/* Expense */}
               <View style={styles.flowItem}>
                 <View style={[styles.flowIconBadge, styles.flowExpenseBadge]}>
-                  <Icon name="arrowDown" size={14} color="#FF4757" strokeWidth={2.5} />
+                  <Icon name="arrowDown" size={14} color="#E11D48" strokeWidth={2.5} />
                 </View>
-                <View>
+                <View style={styles.flowTextWrap}>
                   <Text style={styles.flowLabel}>Pengeluaran</Text>
                   <AmountDisplay
                     amount={summary.expense}
@@ -400,14 +398,16 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.18)',
+    position: 'relative',
+    overflow: 'hidden',
   },
   balanceHeader: {
     marginBottom: 2,
   },
   balanceSubtext: {
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 12,
-    fontWeight: '400',
+    fontWeight: '500',
   },
   heroBalanceText: {
     color: '#FFFFFF',
@@ -415,35 +415,44 @@ const styles = StyleSheet.create({
   },
   incomeExpenseRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.14)',
+    gap: 10,
+    paddingTop: 4,
   },
   flowItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  flowTextWrap: {
+    flex: 1,
   },
   flowIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
   flowIncomeBadge: {
-    backgroundColor: 'rgba(0, 196, 140, 0.18)',
+    backgroundColor: '#E6F9F3',
   },
   flowExpenseBadge: {
-    backgroundColor: 'rgba(255, 71, 87, 0.18)',
+    backgroundColor: '#FFE4E6',
   },
   flowLabel: {
-    color: 'rgba(255, 255, 255, 0.65)',
+    color: '#64748B',
     fontSize: 11,
+    fontWeight: '500',
+    marginBottom: 1,
   },
   flowValue: {
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '700',
   },
   contentBody: {
     flex: 1,

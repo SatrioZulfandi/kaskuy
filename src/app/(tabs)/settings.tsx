@@ -13,7 +13,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { BatikPattern } from '../../components/decorative/BatikPattern';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Colors, Radius, Typography } from '../../constants/theme';
@@ -53,7 +52,6 @@ export default function SettingsScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.heroGradient, { paddingTop: topInset }]}
         >
-          <BatikPattern opacity={0.07} color="#FFFFFF" />
           <Text style={styles.screenTitle}>Pengaturan</Text>
           <Text style={styles.screenSubtitle}>Kustomisasi aplikasi dan evaluasi riset</Text>
         </LinearGradient>

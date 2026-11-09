@@ -136,8 +136,6 @@ export default function ReportScreen() {
           end={{ x: 1, y: 1 }}
           style={[styles.heroGradient, { paddingTop: topInset }]}
         >
-          <BatikPattern opacity={0.07} color="#FFFFFF" />
-
           {/* Month Navigator */}
           <View style={styles.topRow}>
             <View style={styles.dateNavigator}>
@@ -177,6 +175,7 @@ export default function ReportScreen() {
 
           {/* Sisa Budget / Hero overview */}
           <View style={styles.summaryCard}>
+            <BatikPattern opacity={0.14} color="#FFFFFF" />
             <Text style={styles.summarySubtext}>
               {activeTab === 'Budget'
                 ? 'Sisa Budget Bulan Ini'
@@ -518,6 +517,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.18)',
+    position: 'relative',
+    overflow: 'hidden',
   },
   summarySubtext: {
     color: 'rgba(255, 255, 255, 0.75)',

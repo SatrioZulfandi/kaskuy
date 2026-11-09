@@ -20,8 +20,8 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
   style,
 }) => {
   let textColor: string = Colors.light.text;
-  if (type === 'income') textColor = Colors.light.success;
-  if (type === 'expense') textColor = Colors.light.danger;
+  if (type === 'income') textColor = '#059669';
+  if (type === 'expense') textColor = '#E11D48';
 
   let fontSize = 16;
   let fontWeight: '600' | '700' = '600';
@@ -31,7 +31,7 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
     fontWeight = '600';
   } else if (size === 'md') {
     fontSize = 15;
-    fontWeight = '600';
+    fontWeight = '700';
   } else if (size === 'lg') {
     fontSize = 20;
     fontWeight = '700';
@@ -40,10 +40,18 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
     fontWeight = '700';
   }
 
-  const sign = showSign && amount > 0 ? '+' : '';
+  let sign = '';
+  if (showSign && amount > 0) {
+    if (type === 'income') sign = '+';
+    else if (type === 'expense') sign = '-';
+  }
 
   return (
-    <Text style={[{ color: textColor, fontSize, fontWeight }, style]}>
+    <Text
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      style={[{ color: textColor, fontSize, fontWeight }, style]}
+    >
       {sign}
       {formatRupiah(amount)}
     </Text>

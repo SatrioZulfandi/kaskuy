@@ -12,6 +12,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { BatikPattern } from '../../components/decorative/BatikPattern';
 import { AmountDisplay } from '../../components/ui/AmountDisplay';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Icon } from '../../components/ui/Icon';
@@ -112,6 +113,7 @@ export default function WalletDetailScreen() {
           </View>
 
           <View style={styles.balanceCard}>
+            <BatikPattern opacity={0.14} color="#FFFFFF" />
             <Text style={styles.balanceSub}>Saldo Saat Ini</Text>
             <AmountDisplay
               amount={wallet.balance}
@@ -227,7 +229,14 @@ const styles = StyleSheet.create({
   },
   balanceCard: {
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    position: 'relative',
+    overflow: 'hidden',
   },
   balanceSub: {
     color: 'rgba(255, 255, 255, 0.75)',
