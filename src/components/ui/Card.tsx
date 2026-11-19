@@ -1,7 +1,8 @@
 // src/components/ui/Card.tsx
 import React from 'react';
 import { StyleSheet, View, type ViewProps, type ViewStyle } from 'react-native';
-import { Radius } from '../../constants/theme';
+import { Radius, type ThemeColors } from '../../constants/theme';
+import { useThemedStyles } from '../../hooks/use-theme';
 
 type CardProps = ViewProps & {
   children: React.ReactNode;
@@ -15,6 +16,7 @@ export const Card: React.FC<CardProps> = ({
   elevated = true,
   ...rest
 }) => {
+  const styles = useThemedStyles(createStyles);
   return (
     <View
       style={[
@@ -29,9 +31,9 @@ export const Card: React.FC<CardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   base: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: 16,
   },
@@ -44,7 +46,7 @@ const styles = StyleSheet.create({
   },
   flat: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
 });
 

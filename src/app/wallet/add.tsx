@@ -1,6 +1,7 @@
+import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 // src/app/wallet/add.tsx
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -16,9 +17,10 @@ import {
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
-import { Colors, Radius, Typography } from '../../constants/theme';
+import { Radius, Typography, type ThemeColors } from '../../constants/theme';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
-import { createWallet } from '../../db/repositories/walletRepo';
+import { createWallet, getWalletById, updateWallet } from '../../db/repositories/walletRepo';
+import { formatRupiah, parseRupiahInput } from '../../lib/currency';
 import { Haptics } from '../../lib/haptics';
 import { useTopInset } from '../../hooks/useTopInset';
 import type { WalletType } from '../../types';
@@ -34,45 +36,99 @@ const COLORS = [
   '#0066FF', '#10B981', '#F59E0B', '#EF4444',
   '#8B5CF6', '#EC4899', '#00AED6', '#6366F1',
 ];
+const ICONS = ['wallet', 'cash', 'bank', 'phone', 'creditCard', 'savings', 'business', 'shop', 'gift'];
 
 export default function AddWalletScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
   const topInset = useTopInset(12);
+  const params = useLocalSearchParams<{ id?: string }>();
+  const isEditing = params.id !== undefined;
+  const formKey = params.id ?? 'new';
   const [name, setName] = useState('');
   const [type, setType] = useState<WalletType>('bank');
   const [initialBalance, setInitialBalance] = useState('0');
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
+  const [selectedIcon, setSelectedIcon] = useState('bank');
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== formKey;
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const saving = useRef(false);
+  const screenFocused = useRef(false);
+
+  useFocusEffect(useCallback(() => {
+    screenFocused.current = true;
+    return () => { screenFocused.current = false; };
+  }, []));
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        if (!isEditing) {
+          const book = await getDefaultBook();
+          if (!book) throw new Error('Buku keuangan tidak ditemukan.');
+          if (active) setLoadError(null);
+          return;
+        }
+        const id = Number(params.id);
+        const wallet = Number.isSafeInteger(id) && id > 0 ? await getWalletById(id) : null;
+        if (!wallet) throw new Error('Dompet tidak ditemukan.');
+        if (active) {
+          setLoadError(null);
+          setName(wallet.name);
+          setType(wallet.type);
+          setSelectedIcon(wallet.icon);
+          setSelectedColor(wallet.color);
+          setCurrentBalance(wallet.balance);
+        }
+      } catch (error: unknown) {
+        if (active) setLoadError(error instanceof Error ? error.message : 'Gagal memuat dompet.');
+      } finally {
+        if (active) setLoadedKey(formKey);
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [formKey, isEditing, params.id]);
 
   const handleSave = async () => {
+    if (!screenFocused.current || saving.current || loading || loadError) return;
     if (!name.trim()) {
       Alert.alert('Nama Kosong', 'Silakan masukkan nama dompet atau rekening.');
       return;
     }
 
-    const balanceNum = parseInt(initialBalance, 10);
-    const balance = isNaN(balanceNum) ? 0 : balanceNum;
+    const balance = isEditing ? 0 : parseRupiahInput(initialBalance);
+    if (balance === null) {
+      Alert.alert('Saldo Tidak Valid', 'Masukkan saldo dalam Rupiah bulat, misalnya 1500000 atau 1.500.000. Isi 0 jika belum ada saldo.');
+      return;
+    }
 
+    saving.current = true;
     setIsSaving(true);
+    let saved = false;
     try {
-      const book = await getDefaultBook();
-      if (!book) return;
+      if (isEditing) {
+        await updateWallet(Number(params.id), { name: name.trim(), type, icon: selectedIcon, color: selectedColor });
+      } else {
+        const book = await getDefaultBook();
+        if (!book) throw new Error('Buku keuangan tidak ditemukan.');
+        await createWallet(book.id, name.trim(), type, balance, selectedIcon, selectedColor);
+      }
 
-      const typeDef = WALLET_TYPES.find((t) => t.type === type);
-      await createWallet(
-        book.id,
-        name.trim(),
-        type,
-        balance,
-        typeDef?.icon || 'wallet',
-        selectedColor
-      );
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      saved = true;
+      if (screenFocused.current) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      }
     } catch (err: any) {
-      Alert.alert('Gagal Menyimpan', err?.message || 'Terjadi kesalahan');
+      if (screenFocused.current) Alert.alert('Gagal Menyimpan', err?.message || 'Terjadi kesalahan');
     } finally {
-      setIsSaving(false);
+      if (!saved) saving.current = false;
+      if (screenFocused.current) setIsSaving(false);
     }
   };
 
@@ -82,22 +138,26 @@ export default function AddWalletScreen() {
 
       <View style={styles.headerContainer}>
         <LinearGradient
-          colors={[Colors.light.gradientStart, Colors.light.gradientEnd]}
+          colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.heroGradient, { paddingTop: topInset }]}
         >
           <View style={styles.topRow}>
-            <Pressable onPress={() => router.back()} style={styles.closeBtn}>
+            <Pressable onPress={() => router.back()} disabled={isSaving} style={styles.closeBtn}>
               <Icon name="close" size={20} color="#FFFFFF" />
             </Pressable>
-            <Text style={styles.screenTitle}>Tambah Dompet Baru</Text>
+            <Text style={styles.screenTitle}>{isEditing ? 'Edit Dompet' : 'Tambah Dompet'}</Text>
             <View style={{ width: 34 }} />
           </View>
         </LinearGradient>
       </View>
 
       <ScrollView style={styles.contentBody} contentContainerStyle={styles.scrollContent}>
+        {loading || loadError ? (
+          <Text style={styles.inputLabel}>{loading ? 'Memuat dompet...' : loadError}</Text>
+        ) : (
+          <>
         {/* Name */}
         <View style={styles.inputGroup}>
           <Text style={styles.inputLabel}>Nama Dompet / Rekening</Text>
@@ -105,6 +165,7 @@ export default function AddWalletScreen() {
             value={name}
             onChangeText={setName}
             placeholder="Contoh: BCA Tabungan, GoPay, Tunai"
+            placeholderTextColor={colors.textMuted}
             style={styles.textInput}
           />
         </View>
@@ -118,13 +179,13 @@ export default function AddWalletScreen() {
               return (
                 <Pressable
                   key={t.type}
-                  onPress={() => setType(t.type)}
+                  onPress={() => { setType(t.type); setSelectedIcon(t.icon); }}
                   style={[styles.typeItem, sel && styles.typeItemActive]}
                 >
                   <Icon
                     name={t.icon}
                     size={22}
-                    color={sel ? Colors.light.primary : Colors.light.textSecondary}
+                    color={sel ? colors.primary : colors.textSecondary}
                   />
                   <Text style={[styles.typeItemText, sel && styles.typeItemTextActive]}>
                     {t.label}
@@ -137,14 +198,29 @@ export default function AddWalletScreen() {
 
         {/* Initial Balance */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Saldo Awal (Rp)</Text>
-          <TextInput
-            value={initialBalance}
-            onChangeText={setInitialBalance}
-            keyboardType="numeric"
-            placeholder="0"
-            style={styles.textInput}
-          />
+          <Text style={styles.inputLabel}>{isEditing ? 'Saldo Saat Ini' : 'Saldo Awal (Rp)'}</Text>
+          {isEditing ? (
+            <>
+              <Text style={styles.textInput}>{formatRupiah(currentBalance)}</Text>
+              <Text style={styles.inputLabel}>Saldo mengikuti riwayat transaksi. Catat pemasukan atau pengeluaran untuk menyesuaikannya.</Text>
+            </>
+          ) : (
+            <TextInput value={initialBalance} onChangeText={setInitialBalance} keyboardType="numeric" placeholder="0"
+              placeholderTextColor={colors.textMuted} style={styles.textInput} />
+          )}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Pilih Ikon</Text>
+          <View style={styles.colorRow}>
+            {ICONS.map((icon) => (
+              <Pressable key={icon} onPress={() => setSelectedIcon(icon)}
+                accessibilityLabel={`Ikon ${icon}`} accessibilityState={{ selected: selectedIcon === icon }}
+                style={[styles.iconChoice, selectedIcon === icon && styles.typeItemActive]}>
+                <Icon name={icon} size={22} color={selectedColor} />
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         {/* Color Picker */}
@@ -173,24 +249,26 @@ export default function AddWalletScreen() {
         {/* Save Button */}
         <View style={styles.saveActionWrap}>
           <Button
-            title="Simpan Dompet"
+            title={isEditing ? 'Simpan Perubahan' : 'Simpan Dompet'}
             onPress={handleSave}
             loading={isSaving}
             size="lg"
           />
         </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.light.primaryDark,
+    backgroundColor: colors.primaryDark,
   },
   headerContainer: {
-    backgroundColor: Colors.light.primaryDark,
+    backgroundColor: colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
@@ -217,7 +295,7 @@ const styles = StyleSheet.create({
   },
   contentBody: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     marginTop: -12,
@@ -234,18 +312,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.light.textSecondary,
+    color: colors.textSecondary,
     marginLeft: 2,
   },
   textInput: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.light.text,
+    color: colors.text,
   },
   typeGrid: {
     flexDirection: 'row',
@@ -254,31 +332,41 @@ const styles = StyleSheet.create({
   },
   typeItem: {
     width: '48%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     padding: 14,
     alignItems: 'center',
     gap: 8,
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
   },
   typeItemActive: {
-    borderColor: Colors.light.primary,
-    backgroundColor: '#EBF3FF',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
   },
   typeItemText: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.light.textSecondary,
+    color: colors.textSecondary,
   },
   typeItemTextActive: {
-    color: Colors.light.primary,
+    color: colors.primary,
     fontWeight: '600',
   },
   colorRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  iconChoice: {
+    width: 44,
+    height: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   colorCircle: {
     width: 36,

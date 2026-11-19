@@ -1,9 +1,12 @@
 // src/app/(tabs)/_layout.tsx
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import React from 'react';
 import { CustomTabBar } from '../../components/navigation/CustomTabBar';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 
 export default function TabsLayout() {
+  const { onboardingCompleted } = useAppPreferences();
+  if (!onboardingCompleted) return <Redirect href="/onboarding" />;
   return (
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}

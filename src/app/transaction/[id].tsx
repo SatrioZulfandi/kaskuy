@@ -1,11 +1,13 @@
+import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 // src/app/transaction/[id].tsx
-import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -15,7 +17,7 @@ import { AmountDisplay } from '../../components/ui/AmountDisplay';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
-import { Colors, Radius, Typography } from '../../constants/theme';
+import { Radius, Typography, type ThemeColors } from '../../constants/theme';
 import {
   deleteTransaction,
   getTransactionById,
@@ -26,47 +28,91 @@ import { useTopInset } from '../../hooks/useTopInset';
 import type { TransactionWithDetails } from '../../types';
 
 export default function TransactionDetailScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
   const topInset = useTopInset(12);
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tx, setTx] = useState<TransactionWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const screenFocused = useRef(false);
+  const deletePhase = useRef<'idle' | 'confirming' | 'deleting' | 'deleted'>('idle');
 
-  useEffect(() => {
-    async function fetchTx() {
-      if (!id) return;
-      try {
-        const item = await getTransactionById(Number(id));
-        setTx(item);
-      } catch (err) {
-        console.error('Failed to fetch tx:', err);
-      } finally {
-        setLoading(false);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      screenFocused.current = true;
+      setLoading(true);
+      setLoadError(null);
+      setIsDeleting(deletePhase.current === 'deleting');
+
+      async function fetchTx() {
+        try {
+          const transactionId = Number(id);
+          const item = Number.isSafeInteger(transactionId) && transactionId > 0
+            ? await getTransactionById(transactionId)
+            : null;
+          if (active) setTx(item);
+        } catch {
+          if (active) {
+            setTx(null);
+            setLoadError('Gagal memuat detail transaksi. Silakan buka kembali halaman ini.');
+          }
+        } finally {
+          if (active) setLoading(false);
+        }
       }
-    }
-    fetchTx();
-  }, [id]);
+
+      void fetchTx();
+      return () => {
+        active = false;
+        screenFocused.current = false;
+      };
+    }, [id])
+  );
 
   const handleDelete = () => {
+    if (!tx || deletePhase.current !== 'idle') return;
+    deletePhase.current = 'confirming';
+    const dismissConfirmation = () => {
+      if (deletePhase.current === 'confirming') deletePhase.current = 'idle';
+    };
+
     Alert.alert(
       'Hapus Transaksi',
       'Apakah Anda yakin ingin menghapus transaksi ini? Saldo dompet akan disesuaikan kembali.',
       [
-        { text: 'Batal', style: 'cancel' },
+        { text: 'Batal', style: 'cancel', onPress: dismissConfirmation },
         {
           text: 'Hapus',
           style: 'destructive',
           onPress: async () => {
-            if (!tx) return;
+            if (deletePhase.current !== 'confirming' || !screenFocused.current) {
+              dismissConfirmation();
+              return;
+            }
+            deletePhase.current = 'deleting';
+            setIsDeleting(true);
             try {
               await deleteTransaction(tx.id);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              router.back();
-            } catch (err: any) {
-              Alert.alert('Gagal Menghapus', err?.message);
+              deletePhase.current = 'deleted';
+              if (screenFocused.current) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                router.back();
+              }
+            } catch (err: unknown) {
+              deletePhase.current = 'idle';
+              if (screenFocused.current) {
+                Alert.alert('Gagal Menghapus', err instanceof Error ? err.message : 'Terjadi kesalahan saat menghapus transaksi.');
+              }
+            } finally {
+              if (screenFocused.current) setIsDeleting(false);
             }
           },
         },
-      ]
+      ],
+      { cancelable: true, onDismiss: dismissConfirmation }
     );
   };
 
@@ -84,7 +130,7 @@ export default function TransactionDetailScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.center}>
-          <Text style={styles.loadingText}>Transaksi tidak ditemukan.</Text>
+          <Text style={styles.loadingText}>{loadError || 'Transaksi tidak ditemukan.'}</Text>
           <Button title="Kembali" onPress={() => router.back()} style={{ marginTop: 12 }} />
         </View>
       </SafeAreaView>
@@ -99,17 +145,17 @@ export default function TransactionDetailScreen() {
 
       <View style={styles.headerContainer}>
         <LinearGradient
-          colors={[Colors.light.gradientStart, Colors.light.gradientEnd]}
+          colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.heroGradient, { paddingTop: topInset }]}
         >
           <View style={styles.topRow}>
-            <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Pressable onPress={() => router.back()} disabled={isDeleting} style={styles.backBtn}>
               <Icon name="chevLeft" size={20} color="#FFFFFF" strokeWidth={2.2} />
             </Pressable>
             <Text style={styles.screenTitle}>Detail Transaksi</Text>
-            <Pressable onPress={handleDelete} style={styles.deleteBtn}>
+            <Pressable onPress={handleDelete} disabled={isDeleting} style={styles.deleteBtn}>
               <Icon name="close" size={18} color="#FFFFFF" />
             </Pressable>
           </View>
@@ -130,7 +176,7 @@ export default function TransactionDetailScreen() {
         </LinearGradient>
       </View>
 
-      <View style={styles.contentBody}>
+      <ScrollView style={styles.contentBody} contentContainerStyle={{ paddingBottom: 32 }}>
         <View style={styles.detailsCard}>
           {/* Category Row */}
           <View style={styles.row}>
@@ -183,7 +229,7 @@ export default function TransactionDetailScreen() {
               <View style={styles.row}>
                 <Text style={styles.rowLabel}>Sumber Transaksi</Text>
                 <View style={styles.scanBadge}>
-                  <Icon name="scan" size={12} color={Colors.light.success} strokeWidth={2} />
+                  <Icon name="scan" size={12} color={colors.success} strokeWidth={2} />
                   <Text style={styles.scanBadgeText}>Hasil Scan OCR On-Device</Text>
                 </View>
               </View>
@@ -194,21 +240,29 @@ export default function TransactionDetailScreen() {
         {/* Delete action button */}
         <View style={styles.actionWrap}>
           <Button
+            title="Edit Transaksi"
+            variant="outline"
+            disabled={isDeleting}
+            onPress={() => router.push({ pathname: '/transaction/add', params: { id: String(tx.id) } })}
+            style={{ marginBottom: 12 }}
+          />
+          <Button
             title="Hapus Transaksi Ini"
             variant="danger"
             onPress={handleDelete}
+            loading={isDeleting}
             size="md"
           />
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.light.primaryDark,
+    backgroundColor: colors.primaryDark,
   },
   center: {
     flex: 1,
@@ -221,7 +275,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   headerContainer: {
-    backgroundColor: Colors.light.primaryDark,
+    backgroundColor: colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
@@ -266,7 +320,7 @@ const styles = StyleSheet.create({
   },
   contentBody: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     marginTop: -12,
@@ -275,7 +329,7 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   detailsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingHorizontal: 16,
     paddingVertical: 6,
@@ -299,12 +353,12 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: 13,
-    color: Colors.light.textMuted,
+    color: colors.textMuted,
   },
   rowValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.text,
+    color: colors.text,
   },
   rowRightBadge: {
     flexDirection: 'row',
@@ -320,19 +374,19 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.borderLight,
   },
   scanBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.light.successLight,
+    backgroundColor: colors.successLight,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: Radius.xs,
   },
   scanBadgeText: {
-    color: Colors.light.success,
+    color: colors.success,
     fontSize: 11,
     fontWeight: '600',
   },

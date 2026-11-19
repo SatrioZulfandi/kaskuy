@@ -1,6 +1,7 @@
+import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 // src/app/(tabs)/index.tsx
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   FlatList,
   Platform,
@@ -18,14 +19,14 @@ import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
-import { Colors, Radius, Typography } from '../../constants/theme';
+import { Radius, Typography, type ThemeColors } from '../../constants/theme';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import {
   getSummary,
   getTransactions,
 } from '../../db/repositories/transactionRepo';
 import { getTotalBalance } from '../../db/repositories/walletRepo';
-import { formatReadableDate, getPeriodRange } from '../../lib/date';
+import { formatReadableDate, getPeriodRange, shiftPeriodDate } from '../../lib/date';
 import { Haptics } from '../../lib/haptics';
 import { useTopInset } from '../../hooks/useTopInset';
 import type { Book, PeriodFilter, TransactionWithDetails } from '../../types';
@@ -33,6 +34,8 @@ import type { Book, PeriodFilter, TransactionWithDetails } from '../../types';
 const PERIODS: PeriodFilter[] = ['Harian', 'Mingguan', 'Bulanan', 'Tahunan'];
 
 export default function HomeScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
   const topInset = useTopInset(12);
   const [book, setBook] = useState<Book | null>(null);
   const [period, setPeriod] = useState<PeriodFilter>('Bulanan');
@@ -45,51 +48,60 @@ export default function HomeScreen() {
   });
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadVersion = useRef(0);
 
   const loadData = useCallback(async () => {
+    const version = ++loadVersion.current;
+    setLoading(true);
+    setLoadError(null);
     try {
       const activeBook = await getDefaultBook();
-      if (!activeBook) return;
-      setBook(activeBook);
-
-      // 1. Total Balance across all wallets
-      const balance = await getTotalBalance(activeBook.id);
-      setTotalBalance(balance);
-
-      // 2. Period Summary & Transactions
+      if (version !== loadVersion.current) return;
+      if (!activeBook) throw new Error('Buku keuangan tidak ditemukan.');
       const { startDate, endDate } = getPeriodRange(period, currentDate);
-      const sum = await getSummary(activeBook.id, startDate, endDate);
+      const [balance, sum, txs] = await Promise.all([
+        getTotalBalance(activeBook.id),
+        getSummary(activeBook.id, startDate, endDate),
+        getTransactions(activeBook.id, { startDate, endDate, limit: 100 }),
+      ]);
+      if (version !== loadVersion.current) return;
+      setBook(activeBook);
+      setTotalBalance(balance);
       setSummary(sum);
-
-      const txs = await getTransactions(activeBook.id, {
-        startDate,
-        endDate,
-        limit: 100,
-      });
       setTransactions(txs);
-    } catch (err) {
-      console.error('Failed to load home data:', err);
+    } catch {
+      if (version === loadVersion.current) setLoadError('Gagal memuat data keuangan. Silakan coba lagi.');
+    } finally {
+      if (version === loadVersion.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [period, currentDate]);
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
+      void loadData();
+      return () => { loadVersion.current++; };
     }, [loadData])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
-    setRefreshing(false);
   };
 
   const handlePeriodChange = (p: PeriodFilter) => {
+    if (p === period) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {
       // Ignore
     }
+    loadVersion.current++;
+    setLoading(true);
     setPeriod(p);
   };
 
@@ -99,17 +111,9 @@ export default function HomeScreen() {
     } catch {
       // Ignore
     }
-    const next = new Date(currentDate);
-    if (period === 'Tahunan') {
-      next.setFullYear(next.getFullYear() + direction);
-    } else if (period === 'Bulanan') {
-      next.setMonth(next.getMonth() + direction);
-    } else if (period === 'Mingguan') {
-      next.setDate(next.getDate() + direction * 7);
-    } else {
-      next.setDate(next.getDate() + direction);
-    }
-    setCurrentDate(next);
+    loadVersion.current++;
+    setLoading(true);
+    setCurrentDate((date) => shiftPeriodDate(period, date, direction));
   };
 
   const getHeaderDateLabel = () => {
@@ -123,7 +127,8 @@ export default function HomeScreen() {
     if (period === 'Harian') {
       return `${currentDate.getDate()} ${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
     }
-    return `${MONTHS[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+    const range = getPeriodRange('Mingguan', currentDate);
+    return `${formatReadableDate(range.startDate)}\n– ${formatReadableDate(range.endDate)}`;
   };
 
   return (
@@ -133,7 +138,7 @@ export default function HomeScreen() {
       {/* Top Header Card */}
       <View style={styles.headerContainer}>
         <LinearGradient
-          colors={[Colors.light.gradientStart, Colors.light.gradientEnd]}
+          colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.heroGradient, { paddingTop: topInset }]}
@@ -141,18 +146,22 @@ export default function HomeScreen() {
           {/* Top Row: Date Navigator & Book badge */}
           <View style={styles.topBar}>
             <View style={styles.dateNavigator}>
-              <Pressable onPress={() => navigateMonth(-1)} style={styles.navArrow}>
+              <Pressable onPress={() => navigateMonth(-1)} style={styles.navArrow} hitSlop={8}
+                accessibilityRole="button" accessibilityLabel="Periode sebelumnya">
                 <Icon name="chevLeft" size={18} color="#FFFFFF" strokeWidth={2.2} />
               </Pressable>
-              <Text style={styles.dateLabel}>{getHeaderDateLabel()}</Text>
-              <Pressable onPress={() => navigateMonth(1)} style={styles.navArrow}>
+              <Text style={[styles.dateLabel, period === 'Mingguan' && styles.weekLabel]} numberOfLines={2}>
+                {getHeaderDateLabel()}
+              </Text>
+              <Pressable onPress={() => navigateMonth(1)} style={styles.navArrow} hitSlop={8}
+                accessibilityRole="button" accessibilityLabel="Periode berikutnya">
                 <Icon name="chevRight" size={18} color="#FFFFFF" strokeWidth={2.2} />
               </Pressable>
             </View>
 
             <View style={styles.bookBadge}>
               <Icon name="wallet" size={13} color="#FFFFFF" />
-              <Text style={styles.bookBadgeText}>{book?.name || 'Buku Utama'}</Text>
+              <Text style={styles.bookBadgeText} numberOfLines={1}>{book?.name || 'Buku Utama'}</Text>
             </View>
           </View>
 
@@ -163,6 +172,9 @@ export default function HomeScreen() {
               return (
                 <Pressable
                   key={p}
+                  accessibilityRole="tab"
+                  accessibilityLabel={p}
+                  accessibilityState={{ selected: active }}
                   onPress={() => handlePeriodChange(p)}
                   style={[styles.periodPill, active && styles.periodPillActive]}
                 >
@@ -176,49 +188,38 @@ export default function HomeScreen() {
 
           {/* Balance & Income/Expense Summary */}
           <View style={styles.summaryCard}>
-            <BatikPattern opacity={0.1} color="#FFFFFF" />
-            <View style={styles.balanceHeader}>
-              <Text style={styles.balanceSubtext}>Total Saldo Keseluruhan</Text>
-            </View>
-            <AmountDisplay
-              amount={totalBalance}
-              size="hero"
-              style={styles.heroBalanceText}
-            />
+            <BatikPattern opacity={0.07} color="#FFFFFF" />
+            {loading || loadError ? (
+              <Text style={styles.balanceSubtext}>{loading ? 'Memuat ringkasan...' : 'Ringkasan belum dapat dimuat.'}</Text>
+            ) : (
+              <>
+                <View style={styles.balanceHeader}>
+                  <Text style={styles.balanceSubtext}>Total Saldo Keseluruhan</Text>
+                </View>
+                <AmountDisplay amount={totalBalance} size="hero" style={styles.heroBalanceText} />
 
-            <View style={styles.incomeExpenseRow}>
-              {/* Income */}
-              <View style={styles.flowItem}>
-                <View style={[styles.flowIconBadge, styles.flowIncomeBadge]}>
-                  <Icon name="arrowUp" size={14} color="#059669" strokeWidth={2.5} />
+                <View style={styles.incomeExpenseRow}>
+                  <View style={styles.flowItem}>
+                    <View style={[styles.flowIconBadge, styles.flowIncomeBadge]}>
+                      <Icon name="arrowUp" size={14} color={colors.success} strokeWidth={2.5} />
+                    </View>
+                    <View style={styles.flowTextWrap}>
+                      <Text style={styles.flowLabel}>Pemasukan</Text>
+                      <AmountDisplay amount={summary.income} type="income" size="md" style={styles.flowValue} />
+                    </View>
+                  </View>
+                  <View style={styles.flowItem}>
+                    <View style={[styles.flowIconBadge, styles.flowExpenseBadge]}>
+                      <Icon name="arrowDown" size={14} color={colors.danger} strokeWidth={2.5} />
+                    </View>
+                    <View style={styles.flowTextWrap}>
+                      <Text style={styles.flowLabel}>Pengeluaran</Text>
+                      <AmountDisplay amount={summary.expense} type="expense" size="md" style={styles.flowValue} />
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.flowTextWrap}>
-                  <Text style={styles.flowLabel}>Pemasukan</Text>
-                  <AmountDisplay
-                    amount={summary.income}
-                    type="income"
-                    size="md"
-                    style={styles.flowValue}
-                  />
-                </View>
-              </View>
-
-              {/* Expense */}
-              <View style={styles.flowItem}>
-                <View style={[styles.flowIconBadge, styles.flowExpenseBadge]}>
-                  <Icon name="arrowDown" size={14} color="#E11D48" strokeWidth={2.5} />
-                </View>
-                <View style={styles.flowTextWrap}>
-                  <Text style={styles.flowLabel}>Pengeluaran</Text>
-                  <AmountDisplay
-                    amount={summary.expense}
-                    type="expense"
-                    size="md"
-                    style={styles.flowValue}
-                  />
-                </View>
-              </View>
-            </View>
+              </>
+            )}
           </View>
         </LinearGradient>
       </View>
@@ -227,39 +228,64 @@ export default function HomeScreen() {
       <View style={styles.contentBody}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Riwayat Transaksi</Text>
+          <Pressable accessibilityRole="button" onPress={() => {
+            const range = getPeriodRange(period, currentDate);
+            router.push({ pathname: '/transaction/list', params: { ...range, title: getHeaderDateLabel().replace('\n', ' ') } });
+          }} style={styles.addTxButton}>
+            <Icon name="search" size={16} color={colors.primary} />
+            <Text style={styles.addTxText}>Semua</Text>
+          </Pressable>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tambah transaksi"
             onPress={() => router.push('/transaction/add' as any)}
             style={styles.addTxButton}
           >
-            <Icon name="plus" size={15} color={Colors.light.primary} />
+            <Icon name="plus" size={15} color={colors.primary} />
             <Text style={styles.addTxText}>Tambah</Text>
           </Pressable>
         </View>
 
         <FlatList
-          data={transactions}
+          data={loading || loadError ? [] : transactions}
           keyExtractor={(item) => String(item.id)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <EmptyState
-              icon="wallet"
-              title="Belum Ada Transaksi"
-              subtitle="Catat pengeluaran atau pemasukan secara manual, atau scan struk belanja Anda."
-              action={
-                <Button
-                  title="+ Catat Transaksi Baru"
-                  size="sm"
-                  onPress={() => router.push('/transaction/add' as any)}
-                />
-              }
-            />
+            loading ? (
+              <Text style={styles.txSubtitle}>Memuat transaksi...</Text>
+            ) : loadError ? (
+              <EmptyState
+                icon="wallet"
+                title="Data Belum Dapat Dimuat"
+                subtitle={loadError}
+                action={<Button title="Coba Lagi" size="sm" onPress={() => { void loadData(); }} />}
+              />
+            ) : (
+              <EmptyState
+                icon="wallet"
+                title="Belum Ada Transaksi"
+                subtitle="Catat pengeluaran atau pemasukan secara manual, atau scan struk belanja Anda."
+                action={
+                  <Button
+                    title="+ Catat Transaksi Baru"
+                    size="sm"
+                    onPress={() => router.push('/transaction/add' as any)}
+                  />
+                }
+              />
+            )
           }
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const isIncome = item.type === 'income';
             return (
+              <View>
+                {(index === 0 || transactions[index - 1].date !== item.date) && (
+                  <Text style={[styles.txSubtitle, { marginBottom: 8, fontWeight: '600' }]}>{formatReadableDate(item.date)}</Text>
+                )}
               <Pressable
+                accessibilityRole="button"
                 onPress={() => router.push(`/transaction/${item.id}` as any)}
                 style={({ pressed }) => [
                   styles.txItem,
@@ -295,6 +321,7 @@ export default function HomeScreen() {
                   size="md"
                 />
               </Pressable>
+              </View>
             );
           }}
         />
@@ -303,13 +330,13 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.light.primaryDark,
+    backgroundColor: colors.primaryDark,
   },
   headerContainer: {
-    backgroundColor: Colors.light.primaryDark,
+    backgroundColor: colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
@@ -322,9 +349,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     marginBottom: 14,
   },
   dateNavigator: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -338,11 +367,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dateLabel: {
+    flexShrink: 1,
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
+  weekLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
   bookBadge: {
+    maxWidth: 110,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
@@ -352,6 +387,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   bookBadgeText: {
+    flexShrink: 1,
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '500',
@@ -389,7 +425,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   periodPillTextActive: {
-    color: Colors.light.primary,
+    color: colors.primaryDark,
     fontWeight: '600',
   },
   summaryCard: {
@@ -423,7 +459,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     paddingVertical: 10,
     paddingHorizontal: 10,
@@ -439,13 +475,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   flowIncomeBadge: {
-    backgroundColor: '#E6F9F3',
+    backgroundColor: colors.successLight,
   },
   flowExpenseBadge: {
-    backgroundColor: '#FFE4E6',
+    backgroundColor: colors.dangerLight,
   },
   flowLabel: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '500',
     marginBottom: 1,
@@ -456,7 +492,7 @@ const styles = StyleSheet.create({
   },
   contentBody: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     marginTop: -12,
@@ -465,6 +501,8 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
@@ -472,7 +510,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Typography.title.fontSize,
     fontWeight: Typography.title.fontWeight,
-    color: Colors.light.text,
+    color: colors.text,
   },
   addTxButton: {
     flexDirection: 'row',
@@ -482,7 +520,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   addTxText: {
-    color: Colors.light.primary,
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -491,7 +529,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   txItem: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: 14,
     flexDirection: 'row',
@@ -526,12 +564,12 @@ const styles = StyleSheet.create({
   txTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.light.text,
+    color: colors.text,
     marginBottom: 2,
   },
   txSubtitle: {
     fontSize: 12,
-    color: Colors.light.textMuted,
+    color: colors.textMuted,
   },
 });
 

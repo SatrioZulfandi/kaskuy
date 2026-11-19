@@ -1,352 +1,64 @@
-// src/app/(tabs)/wallet.tsx
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
-import {
-  FlatList,
-  Platform,
-  Pressable,
-  RefreshControl,
-  SafeAreaView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { BatikPattern } from '../../components/decorative/BatikPattern';
+import React, { useCallback, useRef, useState } from 'react';
+import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
+import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { AmountDisplay } from '../../components/ui/AmountDisplay';
+import { BatikPattern } from '../../components/decorative/BatikPattern';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
-import { LinearGradient } from '../../components/ui/LinearGradient';
-import { Colors, Radius, Typography } from '../../constants/theme';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import { getTotalBalance, getWallets } from '../../db/repositories/walletRepo';
-import { Haptics } from '../../lib/haptics';
-import { useTopInset } from '../../hooks/useTopInset';
+import { useTheme } from '../../hooks/use-theme';
 import type { Wallet } from '../../types';
 
-const SUB_TABS = ['Saldo', 'Tabungan', 'Tagihan', 'Utang'] as const;
+const FILTERS = [['all', 'Semua'], ['cash', 'Tunai'], ['bank', 'Bank'], ['ewallet', 'E-Wallet'], ['credit_card', 'Kredit'], ['archived', 'Arsip']] as const;
+type WalletFilter = typeof FILTERS[number][0];
+const TYPE_LABELS = { cash: 'Uang Tunai', bank: 'Rekening Bank', ewallet: 'E-Wallet', credit_card: 'Kartu Kredit' };
 
 export default function WalletScreen() {
-  const topInset = useTopInset(12);
+  const colors = useTheme();
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [totalBalance, setTotalBalance] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<string>('Saldo');
-  const [refreshing, setRefreshing] = useState(false);
-
-  const loadWallets = useCallback(async () => {
+  const [total, setTotal] = useState(0);
+  const [bookName, setBookName] = useState('Buku Aktif');
+  const [filter, setFilter] = useState<WalletFilter>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const version = useRef(0);
+  const load = useCallback(async () => {
+    const request = ++version.current;
+    setLoading(true);
+    setError(null);
     try {
       const book = await getDefaultBook();
-      if (!book) return;
-
-      const list = await getWallets(book.id);
+      if (!book) throw new Error('Buku keuangan tidak ditemukan.');
+      const [list, balance] = await Promise.all([getWallets(book.id, true), getTotalBalance(book.id)]);
+      if (request !== version.current) return;
       setWallets(list);
-
-      const total = await getTotalBalance(book.id);
-      setTotalBalance(total);
-    } catch (err) {
-      console.error('Failed to load wallets:', err);
-    }
+      setTotal(balance);
+      setBookName(book.name);
+    } catch { if (request === version.current) setError('Daftar dompet belum dapat dimuat. Silakan coba lagi.'); }
+    finally { if (request === version.current) setLoading(false); }
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadWallets();
-    }, [loadWallets])
-  );
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadWallets();
-    setRefreshing(false);
-  };
-
-  const handleTabPress = (tab: string) => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
-      // Ignore
-    }
-    setActiveTab(tab);
-  };
-
-  const getWalletTypeLabel = (type: string) => {
-    switch (type) {
-      case 'cash':
-        return 'Uang Tunai';
-      case 'bank':
-        return 'Rekening Bank';
-      case 'ewallet':
-        return 'E-Wallet';
-      case 'credit_card':
-        return 'Kartu Kredit';
-      default:
-        return 'Dompet';
-    }
-  };
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={Platform.OS === 'android'} />
-
-      <View style={styles.headerContainer}>
-        <LinearGradient
-          colors={[Colors.light.gradientStart, Colors.light.gradientEnd]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.heroGradient, { paddingTop: topInset }]}
-        >
-          <View style={styles.topRow}>
-            <Text style={styles.screenTitle}>Dompet Saya</Text>
-            <Pressable
-              onPress={() => router.push('/wallet/add' as any)}
-              style={styles.headerActionBtn}
-            >
-              <Icon name="plus" size={18} color="#FFFFFF" />
-            </Pressable>
-          </View>
-
-          {/* Sub-tabs: Saldo / Tabungan / Tagihan / Utang */}
-          <View style={styles.subTabRow}>
-            {SUB_TABS.map((tab) => {
-              const active = activeTab === tab;
-              return (
-                <Pressable
-                  key={tab}
-                  onPress={() => handleTabPress(tab)}
-                  style={[styles.subTabPill, active && styles.subTabPillActive]}
-                >
-                  <Text style={[styles.subTabPillText, active && styles.subTabPillTextActive]}>
-                    {tab}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Total Balance Card */}
-          <View style={styles.totalCard}>
-            <BatikPattern opacity={0.14} color="#FFFFFF" />
-            <Text style={styles.totalLabel}>Total Saldo Tersedia</Text>
-            <AmountDisplay amount={totalBalance} size="hero" style={styles.totalValue} />
-          </View>
-        </LinearGradient>
-      </View>
-
-      <View style={styles.contentBody}>
-        <FlatList
-          data={wallets}
-          keyExtractor={(item) => String(item.id)}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListFooterComponent={
-            <Pressable
-              onPress={() => router.push('/wallet/add' as any)}
-              style={({ pressed }) => [
-                styles.addWalletCard,
-                pressed && styles.addWalletCardPressed,
-              ]}
-            >
-              <View style={styles.addWalletIconWrap}>
-                <Icon name="plus" size={20} color={Colors.light.primary} />
-              </View>
-              <Text style={styles.addWalletText}>Tambah Dompet Baru</Text>
-            </Pressable>
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push(`/wallet/${item.id}` as any)}
-              style={({ pressed }) => [
-                styles.walletCard,
-                pressed && styles.walletCardPressed,
-              ]}
-            >
-              <View
-                style={[
-                  styles.walletIconWrap,
-                  { backgroundColor: `${item.color}15` },
-                ]}
-              >
-                <Icon name={item.icon || 'wallet'} size={24} color={item.color} />
-              </View>
-
-              <View style={styles.walletDetails}>
-                <Text style={styles.walletName}>{item.name}</Text>
-                <Text style={styles.walletType}>{getWalletTypeLabel(item.type)}</Text>
-              </View>
-
-              <AmountDisplay
-                amount={item.balance}
-                size="md"
-                type={item.balance < 0 ? 'expense' : 'neutral'}
-              />
-            </Pressable>
-          )}
-        />
-      </View>
-    </SafeAreaView>
-  );
+  useFocusEffect(useCallback(() => { void load(); return () => { version.current++; }; }, [load]));
+  const visible = wallets.filter((wallet) => filter === 'archived' ? wallet.is_archived !== 0 : wallet.is_archived === 0 && (filter === 'all' || wallet.type === filter));
+  const addWallet = () => router.push('/wallet/add');
+  return <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScreenHeader title="Dompet Saya" subtitle={bookName} back={false} action={<Pressable accessibilityRole="button" accessibilityLabel="Tambah dompet" onPress={addWallet} style={{ padding: 8 }}><Icon name="plus" color="#FFFFFF" size={23} /></Pressable>} />
+    <View style={{ margin: 20, padding: 20, borderRadius: 18, backgroundColor: '#1B365D', overflow: 'hidden', gap: 8 }}>
+      <BatikPattern opacity={0.07} />
+      <Text style={{ color: '#DDE9FF', fontSize: 12 }}>Total Saldo Dompet Aktif</Text>
+      {loading || error ? <Text style={{ color: '#FFFFFF' }}>{loading ? 'Memuat saldo...' : 'Saldo belum dapat dimuat'}</Text> : <AmountDisplay amount={total} size="hero" style={{ color: '#FFFFFF' }} />}
+    </View>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 14 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
+      {FILTERS.map(([value, label]) => <Pressable key={value} onPress={() => setFilter(value)} accessibilityRole="tab" accessibilityState={{ selected: filter === value }} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: filter === value ? colors.primary : colors.surface }}><Text style={{ color: filter === value ? '#FFFFFF' : colors.text }}>{label}</Text></Pressable>)}
+    </ScrollView>
+    <FlatList data={loading || error ? [] : visible} keyExtractor={(wallet) => String(wallet.id)} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28, gap: 12 }} refreshing={loading} onRefresh={() => { void load(); }}
+      ListEmptyComponent={loading ? <Text style={{ color: colors.textSecondary }}>Memuat dompet...</Text> : <EmptyState icon="wallet" title={error ? 'Dompet Belum Dapat Dimuat' : filter === 'archived' ? 'Belum Ada Dompet Arsip' : 'Belum Ada Dompet'} subtitle={error || (filter === 'archived' ? 'Dompet yang diarsipkan tetap menyimpan riwayat transaksi.' : 'Tambahkan dompet atau pilih filter lainnya.')} action={<Button title={error ? 'Coba Lagi' : 'Tambah Dompet'} onPress={error ? () => { void load(); } : addWallet} />} />}
+      renderItem={({ item }) => <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/wallet/[id]', params: { id: item.id } })} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, padding: 18, borderRadius: 18, gap: 14 }}>
+        <View style={{ padding: 12, borderRadius: 14, backgroundColor: `${item.color}18` }}><Icon name={item.icon} color={item.color} size={25} /></View>
+        <View style={{ flex: 1, gap: 5 }}><Text numberOfLines={1} style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>{item.name}</Text><Text style={{ color: colors.textSecondary, fontSize: 12 }}>{TYPE_LABELS[item.type]}{item.is_archived ? ' · Diarsipkan' : ''}</Text><AmountDisplay amount={item.balance} size="md" /></View>
+        <Icon name="chevRight" color={colors.textMuted} size={18} />
+      </Pressable>} />
+  </View>;
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.light.primaryDark,
-  },
-  headerContainer: {
-    backgroundColor: Colors.light.primaryDark,
-  },
-  heroGradient: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 16 : 8,
-    paddingBottom: 22,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  screenTitle: {
-    fontSize: Typography.header.fontSize,
-    fontWeight: Typography.header.fontWeight,
-    color: '#FFFFFF',
-  },
-  headerActionBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subTabRow: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: Radius.md,
-    padding: 3,
-    marginBottom: 16,
-  },
-  subTabPill: {
-    flex: 1,
-    paddingVertical: 6,
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
-  subTabPillActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  subTabPillText: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  subTabPillTextActive: {
-    color: Colors.light.primary,
-    fontWeight: '600',
-  },
-  totalCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: Radius.lg,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  totalLabel: {
-    color: 'rgba(255, 255, 255, 0.75)',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  totalValue: {
-    color: '#FFFFFF',
-  },
-  contentBody: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    marginTop: -12,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-  },
-  listContent: {
-    paddingBottom: 28,
-    gap: 12,
-  },
-  walletCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
-  },
-  walletCardPressed: {
-    transform: [{ scale: 0.99 }],
-    opacity: 0.9,
-  },
-  walletIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  walletDetails: {
-    flex: 1,
-  },
-  walletName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 2,
-  },
-  walletType: {
-    fontSize: 12,
-    color: Colors.light.textMuted,
-  },
-  addWalletCard: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#D1D5DB',
-    borderRadius: Radius.lg,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    marginTop: 4,
-  },
-  addWalletCardPressed: {
-    backgroundColor: '#F3F4F6',
-  },
-  addWalletIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.light.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addWalletText: {
-    color: Colors.light.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-});
-

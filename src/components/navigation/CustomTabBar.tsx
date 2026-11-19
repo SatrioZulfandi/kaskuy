@@ -9,6 +9,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { ThemeColors } from '../../constants/theme';
+import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 import { Haptics } from '../../lib/haptics';
 import { Icon } from '../ui/Icon';
 
@@ -35,10 +37,9 @@ const RIGHT_TABS: TabDefinition[] = [
   { name: 'settings', label: 'Pengaturan', icon: 'settings' },
 ];
 
-const ACTIVE_COLOR = '#1B365D';
-const INACTIVE_COLOR = '#64748B';
-
 export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, navigation }) => {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const currentRouteName = state.routes[state.index]?.name;
 
@@ -51,7 +52,7 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, navigation })
 
     const event = navigation.emit({
       type: 'tabPress',
-      target: routeName,
+      target: state.routes.find((route: { name: string }) => route.name === routeName)?.key ?? routeName,
       canPreventDefault: true,
     });
 
@@ -72,12 +73,19 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, navigation })
 
   const renderTabItem = (item: TabDefinition) => {
     const isFocused = currentRouteName === item.name;
-    const color = isFocused ? ACTIVE_COLOR : INACTIVE_COLOR;
+    const color = isFocused ? colors.primary : colors.tabBarInactive;
 
     return (
       <Pressable
         key={item.name}
+        accessibilityRole="tab"
+        accessibilityLabel={item.label}
+        accessibilityState={{ selected: isFocused }}
         onPress={() => handleTabPress(item.name, isFocused)}
+        onLongPress={() => navigation.emit({
+          type: 'tabLongPress',
+          target: state.routes.find((route: { name: string }) => route.name === item.name)?.key ?? item.name,
+        })}
         style={styles.tabItem}
       >
         <Icon
@@ -121,6 +129,8 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, navigation })
       {/* Raised Center Scan Button */}
       <View style={styles.raisedButtonAnchor}>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Scan struk"
           onPress={handleScanPress}
           style={({ pressed }) => [
             styles.raisedButtonContainer,
@@ -136,11 +146,11 @@ export const CustomTabBar: React.FC<CustomTabBarProps> = ({ state, navigation })
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   wrapper: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.tabBarBg,
     borderTopWidth: 1,
-    borderTopColor: '#EEF2F6',
+    borderTopColor: colors.tabBarBorder,
     position: 'relative',
     ...Platform.select({
       ios: {

@@ -11,19 +11,86 @@ const MONTH_SHORT = [
   'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'
 ];
 
-export function getTodayDateString(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) {
+    const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    return isLeapYear ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+export function isValidMonthString(value: string): boolean {
+  return /^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(value);
+}
+
+export function isValidDateString(value: string): boolean {
+  if (!/^[1-9]\d{3}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  return day <= daysInMonth(year, month);
+}
+
+export function formatDateString(date: Date): string {
+  if (!Number.isFinite(date.getTime()) || date.getFullYear() < 1000 || date.getFullYear() > 9999) {
+    throw new Error('Tanggal tidak valid.');
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
+export function getTodayDateString(): string {
+  return formatDateString(new Date());
+}
+
 export function getCurrentMonthString(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
+  return getTodayDateString().slice(0, 7);
+}
+
+export function getMonthRange(month: string): { startDate: string; endDate: string } {
+  if (!isValidMonthString(month)) throw new Error('Bulan harus menggunakan format YYYY-MM yang valid.');
+  const [year, monthNumber] = month.split('-').map(Number);
+  return {
+    startDate: `${month}-01`,
+    endDate: `${month}-${daysInMonth(year, monthNumber)}`,
+  };
+}
+
+export function getDateStringsInRange(startDate: string, endDate: string): string[] {
+  if (!isValidDateString(startDate) || !isValidDateString(endDate) || startDate > endDate) {
+    throw new Error('Rentang tanggal tidak valid.');
+  }
+  const [year, month, day] = startDate.split('-').map(Number);
+  // Use local calendar arithmetic, so UTC offsets and daylight saving do not shift dates.
+  const current = new Date(year, month - 1, day, 12);
+  const dates: string[] = [];
+  let date = startDate;
+  while (date <= endDate) {
+    dates.push(date);
+    if (date === endDate) break;
+    current.setDate(current.getDate() + 1);
+    date = formatDateString(current);
+  }
+  return dates;
+}
+
+export function shiftPeriodDate(
+  period: PeriodFilter,
+  anchorDate: Date,
+  direction: -1 | 1
+): Date {
+  formatDateString(anchorDate);
+  const next = new Date(anchorDate);
+  if (period === 'Bulanan') {
+    next.setDate(1);
+    next.setMonth(next.getMonth() + direction);
+  } else if (period === 'Tahunan') {
+    next.setFullYear(next.getFullYear() + direction, 0, 1);
+  } else {
+    next.setDate(next.getDate() + direction * (period === 'Mingguan' ? 7 : 1));
+  }
+  formatDateString(next);
+  return next;
 }
 
 export function formatReadableDate(dateStr: string): string {
@@ -50,6 +117,7 @@ export function getPeriodRange(
   period: PeriodFilter,
   anchorDate = new Date()
 ): { startDate: string; endDate: string } {
+  formatDateString(anchorDate);
   const y = anchorDate.getFullYear();
   const m = anchorDate.getMonth();
   const d = anchorDate.getDate();
@@ -66,16 +134,12 @@ export function getPeriodRange(
       const start = new Date(anchorDate);
       start.setDate(anchorDate.getDate() - 6);
       return {
-        startDate: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
-        endDate: `${y}-${pad(m + 1)}-${pad(d)}`,
+        startDate: formatDateString(start),
+        endDate: formatDateString(anchorDate),
       };
     }
     case 'Bulanan': {
-      const lastDay = new Date(y, m + 1, 0).getDate();
-      return {
-        startDate: `${y}-${pad(m + 1)}-01`,
-        endDate: `${y}-${pad(m + 1)}-${pad(lastDay)}`,
-      };
+      return getMonthRange(`${y}-${pad(m + 1)}`);
     }
     case 'Tahunan': {
       return {

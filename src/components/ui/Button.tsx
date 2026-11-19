@@ -8,7 +8,8 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import { Colors, Radius } from '../../constants/theme';
+import { Radius, type ThemeColors } from '../../constants/theme';
+import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 import { Haptics } from '../../lib/haptics';
 import { LinearGradient } from './LinearGradient';
 
@@ -36,6 +37,9 @@ export const Button: React.FC<ButtonProps> = ({
   icon,
   style,
 }) => {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const variantStyles = useThemedStyles(createVariantStyles);
   const handlePress = () => {
     if (disabled || loading) return;
     try {
@@ -53,7 +57,7 @@ export const Button: React.FC<ButtonProps> = ({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'outline' ? Colors.light.primary : '#FFFFFF'}
+          color={variant === 'outline' || variant === 'secondary' ? colors.primary : '#FFFFFF'}
           style={styles.spinner}
         />
       ) : (
@@ -78,6 +82,9 @@ export const Button: React.FC<ButtonProps> = ({
   if (isGradient) {
     return (
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ disabled: disabled || loading, busy: loading }}
         onPress={handlePress}
         disabled={disabled || loading}
         style={({ pressed }) => [
@@ -88,7 +95,7 @@ export const Button: React.FC<ButtonProps> = ({
         ]}
       >
         <LinearGradient
-          colors={[Colors.light.gradientStart, Colors.light.gradientEnd]}
+          colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.container, sizeStyles[size]]}
@@ -101,6 +108,9 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       onPress={handlePress}
       disabled={disabled || loading}
       style={({ pressed }) => [
@@ -136,22 +146,22 @@ const sizeStyles = {
   },
 };
 
-const variantStyles = {
+const createVariantStyles = (colors: ThemeColors) => ({
   primary: {},
   secondary: {
-    backgroundColor: '#EBF3FF',
+    backgroundColor: colors.primaryLight,
   },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: Colors.light.primary,
+    borderColor: colors.primary,
   },
   danger: {
-    backgroundColor: Colors.light.danger,
+    backgroundColor: colors.danger,
   },
-};
+});
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   pressable: {
     overflow: 'hidden',
     borderRadius: Radius.md,
@@ -186,9 +196,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   textOutline: {
-    color: Colors.light.primary,
+    color: colors.primary,
   },
   textSecondary: {
-    color: Colors.light.primary,
+    color: colors.primary,
   },
 });

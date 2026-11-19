@@ -481,49 +481,53 @@ flowchart TD
 
 ## 9. Fase Pengembangan
 
+> Status implementasi 19 November 2026: alur inti non-OCR telah dilengkapi dan diuji otomatis. Penyempurnaan pipeline serta evaluasi riset OCR ditunda sampai dataset tersedia. Pengujian APK pada perangkat fisik dan animasi lanjutan masih menjadi tahap verifikasi/polish. Detail penggunaan, batas ekspor Android, dan cadangan tersedia di README.md.
+
 ### Fase 1 — Fondasi & Database
 
 > **Goal:** Setup database, seed data, arsitektur, dan design system.
 
 - [ ] Refactor folder structure sesuai rencana
-- [ ] Setup `expo-sqlite` database dengan schema lengkap (termasuk tabel scan_results, ocr_corrections, merchant_dictionary)
-- [ ] Buat migration system sederhana (version-based)
-- [ ] Buat seed data: default categories, default book, built-in merchant dictionary
-- [ ] Buat repository layer (CRUD untuk semua 8 entity)
-- [ ] Buat TypeScript types untuk semua entity
-- [ ] Setup theme system baru (palet warna, dark mode, spacing tokens)
-- [ ] Buat komponen BatikPattern (SVG kawung/ceplok) untuk dekorasi
-- [ ] Buat komponen UI dasar: Button, Card, AmountDisplay, EmptyState
-- [ ] Lint & typecheck pass
+- [x] Setup `expo-sqlite` database dengan schema lengkap (termasuk tabel scan_results, ocr_corrections, merchant_dictionary)
+- [x] Buat migration system sederhana (version-based), termasuk pemulihan seed lama yang terputus
+- [x] Buat seed data: default categories, default book, built-in merchant dictionary
+- [x] Repository CRUD non-OCR (buku, dompet, kategori, transaksi, budget); repository OCR tersedia, penyempurnaannya mengikuti Fase 4
+- [x] Buat TypeScript types untuk semua entity
+- [x] Setup theme system baru (palet warna, dark mode, spacing tokens)
+- [x] Buat komponen BatikPattern (SVG kawung/ceplok) untuk dekorasi
+- [x] Buat komponen UI dasar: Button, Card, AmountDisplay, EmptyState
+- [x] Lint & typecheck pass
 
 ### Fase 2 — Bottom Tab Navigation + Beranda
 
 > **Goal:** Navigasi utama dengan center scan button + halaman beranda (Dashboard 1).
 
-- [ ] Setup Expo Router tab layout: 4 tab + center scan button (raised)
-- [ ] Custom Bottom Tab Bar component (sesuai desain preview)
-- [ ] **Dashboard 1**: Hero card saldo (gradient + batik pattern)
-- [ ] Period tabs (Harian / Mingguan / Bulanan / Tahunan)
-- [ ] Transaction list grouped by date
-- [ ] Transaction card component (icon, nama, kategori, waktu, jumlah)
-- [ ] Empty state dengan pola batik
-- [ ] Lint & typecheck pass
+- [x] Setup Expo Router tab layout: 4 tab + center scan button (raised)
+- [x] Custom Bottom Tab Bar component (sesuai desain preview)
+- [x] **Dashboard 1**: Hero card saldo (gradient + batik pattern)
+- [x] Period tabs (Harian / Mingguan / Bulanan / Tahunan)
+- [x] Transaction list grouped by date + pencarian/filter/pagination riwayat lengkap
+- [x] Transaction card (icon, nama, kategori, tanggal, jumlah)
+- [x] Empty state dengan pola batik
+- [x] Lint & typecheck pass
 
 ### Fase 3 — Form Transaksi Manual
 
 > **Goal:** Input pemasukan & pengeluaran tanpa scan.
 
-- [ ] Tab toggle: Pengeluaran ↔ Pemasukan
-- [ ] Amount input dengan custom numeric keypad
-- [ ] Wallet selector dropdown
-- [ ] Category grid picker (SVG icon + label)
-- [ ] Date picker
-- [ ] Note field
-- [ ] Simpan ke database + otomatis update wallet balance
-- [ ] Edit & hapus transaksi
-- [ ] Lint & typecheck pass
+- [x] Tab toggle: Pengeluaran ↔ Pemasukan
+- [x] Amount input dengan custom numeric keypad
+- [x] Wallet selector
+- [x] Category grid picker (SVG icon + label)
+- [x] Date picker
+- [x] Note field
+- [x] Simpan ke database + otomatis update wallet balance secara atomik
+- [x] Edit & hapus transaksi
+- [x] Lint & typecheck pass
 
 ### Fase 4 — Pipeline Scan Struk (Inti Riset)
+
+> Ditunda sesuai arahan pengguna; alur scan yang sudah ada dipertahankan. Checklist berikut belum menyatakan pipeline riset selesai.
 
 > **Goal:** Implementasi penuh alur OCR dari foto hingga tersimpan.
 
@@ -539,51 +543,51 @@ flowchart TD
 - [ ] Screen: Hasil Scan — tampilkan data ter-parse, highlight bagian ambigu
 - [ ] Konfirmasi/edit oleh user → simpan transaksi + update kamus adaptif
 - [ ] Simpan scan_result + koreksi ke database
-- [ ] Lint & typecheck pass
+- [x] Lint & typecheck pass
 
 ### Fase 5 — Dompet + Budget
 
 > **Goal:** Kelola akun keuangan + budget tracking.
 
-- [ ] Tab Dompet — sub-tabs: Saldo / Tabungan / Tagihan / Utang
-- [ ] Wallet cards (icon, nama, tipe, saldo)
-- [ ] Total saldo card dengan batik pattern
-- [ ] Form tambah/edit dompet (nama, tipe, saldo awal, ikon, warna)
-- [ ] **Dashboard 7**: Detail dompet + riwayat transaksi per dompet
-- [ ] **Dashboard 4**: Budget vs Aktual — progress bar per kategori
-- [ ] Form tambah/edit budget per kategori per bulan
-- [ ] Lint & typecheck pass
+- [x] Tab Dompet — filter yang sesuai data: Semua / Tunai / Bank / E-Wallet / Kredit / Arsip
+- [x] Wallet cards (icon, nama, tipe, saldo)
+- [x] Total saldo dompet aktif dengan batik pattern
+- [x] Form tambah/edit dompet (nama, tipe, ikon, warna); saldo awal saat pembuatan, arsip/aktifkan kembali
+- [x] **Dashboard 7**: Statistik lengkap + riwayat transaksi per dompet dengan pagination
+- [x] **Dashboard 4**: Budget vs Aktual — progress bar per kategori dan peringatan mendekati batas
+- [x] Form tambah/edit/hapus budget per kategori per bulan
+- [x] Lint & typecheck pass
 
 ### Fase 6 — Laporan & Dashboard (8 Luaran)
 
 > **Goal:** Semua 8 dashboard/report berfungsi lengkap.
 
-- [ ] Tab Laporan — sub-tabs: Budget / Pemasukan / Pengeluaran / Tren
-- [ ] **Dashboard 2**: Pengeluaran per Kategori (bar chart)
-- [ ] **Dashboard 3**: Pemasukan per Kategori (bar chart)
-- [ ] **Dashboard 5**: Tren Harian — bar chart 7 hari terakhir
-- [ ] **Dashboard 6**: Tren Bulanan — grouped bar chart 6 bulan terakhir
+- [x] Tab Laporan — sub-tabs: Budget / Pemasukan / Pengeluaran / Tren
+- [x] **Dashboard 2**: Pengeluaran per Kategori (bar proporsional + persentase)
+- [x] **Dashboard 3**: Pemasukan per Kategori (bar proporsional + persentase)
+- [x] **Dashboard 5**: Tren Harian — 7 hari lengkap sesuai bulan acuan, termasuk nilai nol
+- [x] **Dashboard 6**: Tren Bulanan — grouped bars 6 bulan kalender lengkap
 - [ ] **Dashboard 8**: Statistik & Akurasi OCR
   - Total scan, distribusi confidence, % koreksi manual
   - Rata-rata waktu OCR, merchant tersering, akurasi per field
-- [ ] Navigasi bulan (← Nov 2026 →) di semua dashboard yang relevan
-- [ ] Tap chart element → drill down ke daftar transaksi
-- [ ] Lint & typecheck pass
+- [x] Navigasi bulan (← Nov 2026 →) di semua dashboard yang relevan
+- [x] Tap chart element → drill down ke daftar transaksi
+- [x] Lint & typecheck pass
 
 ### Fase 7 — Pengaturan & Polish
 
 > **Goal:** Pengaturan, export, dan sentuhan akhir.
 
-- [ ] Halaman Pengaturan lengkap
-- [ ] Toggle tema gelap / terang
-- [ ] Kelola kategori: tambah / edit / hapus custom categories
-- [ ] Kelola buku (multi-book support)
-- [ ] Export data ke CSV
-- [ ] Onboarding screen (first launch) — penjelasan fitur scan
-- [ ] Haptic feedback (`expo-haptics`)
+- [x] Halaman Pengaturan lengkap untuk fitur non-OCR
+- [x] Tema sistem / gelap / terang tersimpan
+- [x] Kelola kategori: tambah / edit / hapus custom categories
+- [x] Kelola buku (multi-book support)
+- [x] Ekspor CSV + cadangan/pemulihan JSON keuangan; Android berbagi teks, web unduhan berkas
+- [x] Onboarding screen (first launch)
+- [x] Haptic feedback melalui wrapper aman
 - [ ] Micro-animations & transitions (shared element, list animations)
 - [ ] Review aksesibilitas (contrast, font size, touch targets)
-- [ ] Final lint & typecheck pass
+- [x] Final lint & typecheck pass
 - [ ] Test di device Android fisik
 
 ---

@@ -1,6 +1,7 @@
 // src/db/repositories/transactionRepo.ts
-import { getDatabase } from '../database';
-import { updateWalletBalance } from './walletRepo';
+import type { SQLiteDatabase } from 'expo-sqlite';
+import { getDatabase, withDatabaseTransaction } from '../database';
+import { getCurrentMonthString, getDateStringsInRange, getMonthRange, isValidDateString } from '../../lib/date';
 import type {
   TransactionType,
   TransactionWithDetails,
@@ -13,6 +14,8 @@ export async function getTransactions(
     endDate?: string;
     walletId?: number;
     categoryId?: number;
+    type?: TransactionType;
+    search?: string;
     limit?: number;
     offset?: number;
   }
@@ -36,6 +39,14 @@ export async function getTransactions(
   if (options?.categoryId) {
     conditions.push('t.category_id = ?');
     params.push(options.categoryId);
+  }
+  if (options?.type) {
+    conditions.push('t.type = ?');
+    params.push(options.type);
+  }
+  if (options?.search?.trim()) {
+    conditions.push("instr(lower(COALESCE(t.note, '') || ' ' || c.name || ' ' || w.name), lower(?)) > 0");
+    params.push(options.search.trim());
   }
 
   let sql = `
@@ -67,6 +78,10 @@ export async function getTransactions(
 
 export async function getTransactionById(id: number): Promise<TransactionWithDetails | null> {
   const db = await getDatabase();
+  return findTransaction(db, id);
+}
+
+async function findTransaction(db: SQLiteDatabase, id: number): Promise<TransactionWithDetails | null> {
   const row = await db.getFirstAsync<TransactionWithDetails>(
     `SELECT 
       t.*,
@@ -84,6 +99,46 @@ export async function getTransactionById(id: number): Promise<TransactionWithDet
   return row ?? null;
 }
 
+async function applyWalletDelta(db: SQLiteDatabase, walletId: number, delta: number): Promise<void> {
+  const wallet = await db.getFirstAsync<{ balance: number }>('SELECT balance FROM wallets WHERE id = ?', [walletId]);
+  if (!wallet || !Number.isSafeInteger(wallet.balance + delta)) {
+    throw new Error('Saldo dompet tidak valid atau melebihi batas nominal.');
+  }
+  const result = await db.runAsync(
+    'UPDATE wallets SET balance = balance + ? WHERE id = ?',
+    [delta, walletId]
+  );
+  if (result.changes !== 1) throw new Error('Dompet transaksi tidak ditemukan.');
+}
+
+async function validateTransaction(
+  db: SQLiteDatabase,
+  data: { book_id: number; wallet_id: number; category_id: number; type: TransactionType; amount: number; date: string },
+  existingWalletId?: number
+): Promise<void> {
+  if (!Number.isSafeInteger(data.amount) || data.amount <= 0) {
+    throw new Error('Nominal transaksi harus berupa Rupiah bulat yang lebih besar dari 0.');
+  }
+  if (!isValidDateString(data.date)) {
+    throw new Error('Tanggal transaksi harus valid dengan format YYYY-MM-DD.');
+  }
+  if (data.type !== 'income' && data.type !== 'expense') {
+    throw new Error('Jenis transaksi tidak valid.');
+  }
+  const wallet = await db.getFirstAsync<{ book_id: number; is_archived: number }>(
+    'SELECT book_id, is_archived FROM wallets WHERE id = ?', [data.wallet_id]
+  );
+  if (!wallet || wallet.book_id !== data.book_id || (wallet.is_archived !== 0 && data.wallet_id !== existingWalletId)) {
+    throw new Error('Pilih dompet aktif dari buku keuangan yang sama.');
+  }
+  const category = await db.getFirstAsync<{ type: TransactionType }>(
+    'SELECT type FROM categories WHERE id = ?', [data.category_id]
+  );
+  if (!category || category.type !== data.type) {
+    throw new Error('Kategori harus sesuai dengan jenis transaksi.');
+  }
+}
+
 export async function createTransaction(data: {
   book_id: number;
   wallet_id: number;
@@ -94,30 +149,30 @@ export async function createTransaction(data: {
   date: string;
   scan_result_id?: number | null;
 }): Promise<TransactionWithDetails> {
-  const db = await getDatabase();
+  return withDatabaseTransaction(async (db) => {
+    await validateTransaction(db, data);
+    const result = await db.runAsync(
+      `INSERT INTO transactions (book_id, wallet_id, category_id, type, amount, note, date, scan_result_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        data.book_id,
+        data.wallet_id,
+        data.category_id,
+        data.type,
+        data.amount,
+        data.note ?? null,
+        data.date,
+        data.scan_result_id ?? null,
+      ]
+    );
 
-  const result = await db.runAsync(
-    `INSERT INTO transactions (book_id, wallet_id, category_id, type, amount, note, date, scan_result_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      data.book_id,
-      data.wallet_id,
-      data.category_id,
-      data.type,
-      data.amount,
-      data.note ?? null,
-      data.date,
-      data.scan_result_id ?? null,
-    ]
-  );
+    const delta = data.type === 'income' ? data.amount : -data.amount;
+    await applyWalletDelta(db, data.wallet_id, delta);
 
-  // Update wallet balance: income increases balance, expense decreases
-  const delta = data.type === 'income' ? data.amount : -data.amount;
-  await updateWalletBalance(data.wallet_id, delta);
-
-  const created = await getTransactionById(result.lastInsertRowId);
-  if (!created) throw new Error('Failed to retrieve created transaction');
-  return created;
+    const created = await findTransaction(db, result.lastInsertRowId);
+    if (!created) throw new Error('Failed to retrieve created transaction');
+    return created;
+  });
 }
 
 export async function updateTransaction(
@@ -131,49 +186,56 @@ export async function updateTransaction(
     date?: string;
   }
 ): Promise<TransactionWithDetails> {
-  const db = await getDatabase();
-  const existing = await getTransactionById(id);
-  if (!existing) throw new Error(`Transaction ${id} not found`);
+  return withDatabaseTransaction(async (db) => {
+    const existing = await findTransaction(db, id);
+    if (!existing) throw new Error(`Transaction ${id} not found`);
 
-  // 1. Revert previous wallet balance impact
-  const revertDelta = existing.type === 'income' ? -existing.amount : existing.amount;
-  await updateWalletBalance(existing.wallet_id, revertDelta);
+    const newWalletId = data.wallet_id ?? existing.wallet_id;
+    const newCategoryId = data.category_id ?? existing.category_id;
+    const newType = data.type ?? existing.type;
+    const newAmount = data.amount ?? existing.amount;
+    const newNote = data.note !== undefined ? data.note : existing.note;
+    const newDate = data.date ?? existing.date;
 
-  // 2. Determine new values
-  const newWalletId = data.wallet_id ?? existing.wallet_id;
-  const newCategoryId = data.category_id ?? existing.category_id;
-  const newType = data.type ?? existing.type;
-  const newAmount = data.amount ?? existing.amount;
-  const newNote = data.note !== undefined ? data.note : existing.note;
-  const newDate = data.date ?? existing.date;
+    await validateTransaction(db, {
+      book_id: existing.book_id,
+      wallet_id: newWalletId,
+      category_id: newCategoryId,
+      type: newType,
+      amount: newAmount,
+      date: newDate,
+    }, existing.wallet_id);
 
-  // 3. Update transaction record
-  await db.runAsync(
-    `UPDATE transactions 
-     SET wallet_id = ?, category_id = ?, type = ?, amount = ?, note = ?, date = ?, updated_at = (datetime('now', 'localtime'))
-     WHERE id = ?`,
-    [newWalletId, newCategoryId, newType, newAmount, newNote, newDate, id]
-  );
+    // Revert, edit, and reapply within the same transaction.
+    const revertDelta = existing.type === 'income' ? -existing.amount : existing.amount;
+    await applyWalletDelta(db, existing.wallet_id, revertDelta);
 
-  // 4. Apply new wallet balance impact
-  const applyDelta = newType === 'income' ? newAmount : -newAmount;
-  await updateWalletBalance(newWalletId, applyDelta);
+    await db.runAsync(
+      `UPDATE transactions
+       SET wallet_id = ?, category_id = ?, type = ?, amount = ?, note = ?, date = ?, updated_at = (datetime('now', 'localtime'))
+       WHERE id = ?`,
+      [newWalletId, newCategoryId, newType, newAmount, newNote, newDate, id]
+    );
 
-  const updated = await getTransactionById(id);
-  if (!updated) throw new Error('Failed to retrieve updated transaction');
-  return updated;
+    const applyDelta = newType === 'income' ? newAmount : -newAmount;
+    await applyWalletDelta(db, newWalletId, applyDelta);
+
+    const updated = await findTransaction(db, id);
+    if (!updated) throw new Error('Failed to retrieve updated transaction');
+    return updated;
+  });
 }
 
 export async function deleteTransaction(id: number): Promise<void> {
-  const db = await getDatabase();
-  const existing = await getTransactionById(id);
-  if (!existing) return;
+  await withDatabaseTransaction(async (db) => {
+    const existing = await findTransaction(db, id);
+    if (!existing) return;
 
-  // Revert balance impact
-  const revertDelta = existing.type === 'income' ? -existing.amount : existing.amount;
-  await updateWalletBalance(existing.wallet_id, revertDelta);
+    const revertDelta = existing.type === 'income' ? -existing.amount : existing.amount;
+    await applyWalletDelta(db, existing.wallet_id, revertDelta);
 
-  await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
+    await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
+  });
 }
 
 // Aggregation for Dashboard 1
@@ -246,6 +308,7 @@ export async function getDailyTrends(
   startDate: string,
   endDate: string
 ): Promise<{ date: string; income: number; expense: number }[]> {
+  const dates = getDateStringsInRange(startDate, endDate);
   const db = await getDatabase();
   const rows = await db.getAllAsync<{
     date: string;
@@ -268,46 +331,41 @@ export async function getDailyTrends(
     map.set(r.date, entry);
   }
 
-  const result: { date: string; income: number; expense: number }[] = [];
-  for (const [date, val] of map.entries()) {
-    result.push({ date, income: val.income, expense: val.expense });
-  }
-  return result;
+  return dates.map((date) => ({ date, ...(map.get(date) ?? { income: 0, expense: 0 }) }));
 }
 
 // Monthly trends for Dashboard 6 (last N months)
 export async function getMonthlyTrends(
   bookId: number,
-  limitMonths: number = 6
+  limitMonths: number = 6,
+  anchorMonth: string = getCurrentMonthString()
 ): Promise<{ month: string; income: number; expense: number }[]> {
+  if (!Number.isSafeInteger(limitMonths) || limitMonths < 1) {
+    throw new Error('Jumlah bulan harus berupa bilangan bulat positif.');
+  }
+  const { endDate } = getMonthRange(anchorMonth);
+  const [year, month] = anchorMonth.split('-').map(Number);
+  const months = Array.from({ length: limitMonths }, (_, index) => {
+    const date = new Date(year, month - limitMonths + index, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const startDate = `${months[0]}-01`;
   const db = await getDatabase();
   const rows = await db.getAllAsync<{
     month: string;
-    type: TransactionType;
-    total: number;
+    income: number;
+    expense: number;
   }>(
-    `SELECT substr(date, 1, 7) AS month, type, SUM(amount) AS total
+    `SELECT substr(date, 1, 7) AS month,
+       SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) AS income,
+       SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) AS expense
      FROM transactions
-     WHERE book_id = ?
-     GROUP BY month, type
-     ORDER BY month DESC
-     LIMIT ?`,
-    [bookId, limitMonths * 2]
+     WHERE book_id = ? AND date >= ? AND date <= ?
+     GROUP BY substr(date, 1, 7)
+     ORDER BY month ASC`,
+    [bookId, startDate, endDate]
   );
 
-  const map = new Map<string, { income: number; expense: number }>();
-  for (const r of rows) {
-    const entry = map.get(r.month) ?? { income: 0, expense: 0 };
-    if (r.type === 'income') entry.income += r.total;
-    if (r.type === 'expense') entry.expense += r.total;
-    map.set(r.month, entry);
-  }
-
-  const result: { month: string; income: number; expense: number }[] = [];
-  for (const [month, val] of map.entries()) {
-    result.push({ month, income: val.income, expense: val.expense });
-  }
-  // Sort ascending by month for display
-  result.sort((a, b) => a.month.localeCompare(b.month));
-  return result;
+  const byMonth = new Map(rows.map((row) => [row.month, row]));
+  return months.map((month) => byMonth.get(month) ?? { month, income: 0, expense: 0 });
 }

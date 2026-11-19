@@ -1,7 +1,7 @@
 // src/components/ui/AmountDisplay.tsx
 import React from 'react';
 import { Text, type TextStyle } from 'react-native';
-import { Colors } from '../../constants/theme';
+import { useTheme } from '../../hooks/use-theme';
 import { formatRupiah } from '../../lib/currency';
 
 type AmountDisplayProps = {
@@ -19,9 +19,10 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
   size = 'md',
   style,
 }) => {
-  let textColor: string = Colors.light.text;
-  if (type === 'income') textColor = '#059669';
-  if (type === 'expense') textColor = '#E11D48';
+  const colors = useTheme();
+  let textColor: string = colors.text;
+  if (type === 'income') textColor = colors.success;
+  if (type === 'expense') textColor = colors.danger;
 
   let fontSize = 16;
   let fontWeight: '600' | '700' = '600';

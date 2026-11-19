@@ -1,6 +1,7 @@
+import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 // src/app/budget/add.tsx
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -14,63 +15,140 @@ import {
   View,
 } from 'react-native';
 import { Button } from '../../components/ui/Button';
+import { DatePickerField } from '../../components/ui/DatePickerField';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
-import { Colors, Radius, Typography } from '../../constants/theme';
+import { Radius, Typography, type ThemeColors } from '../../constants/theme';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
-import { setBudget } from '../../db/repositories/budgetRepo';
+import { deleteBudget, getBudgetById, setBudget, updateBudget } from '../../db/repositories/budgetRepo';
 import { getCategories } from '../../db/repositories/categoryRepo';
-import { formatRupiah } from '../../lib/currency';
-import { getCurrentMonthString } from '../../lib/date';
+import { formatRupiah, parseRupiahInput } from '../../lib/currency';
+import { getCurrentMonthString, isValidMonthString } from '../../lib/date';
 import { Haptics } from '../../lib/haptics';
 import { useTopInset } from '../../hooks/useTopInset';
 import type { Category } from '../../types';
 
 export default function AddBudgetScreen() {
+  const colors = useTheme();
+  const styles = useThemedStyles(createStyles);
   const topInset = useTopInset(12);
+  const params = useLocalSearchParams<{ id?: string; month?: string }>();
+  const isEditing = params.id !== undefined;
+  const formKey = params.id ?? `new:${params.month ?? ''}`;
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [month, setMonth] = useState<string>(getCurrentMonthString());
+  const [month, setMonth] = useState<string>(
+    typeof params.month === 'string' && isValidMonthString(params.month) ? params.month : getCurrentMonthString()
+  );
   const [amountStr, setAmountStr] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== formKey;
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [bookId, setBookId] = useState<number | null>(null);
+  const saving = useRef(false);
+  const deletePhase = useRef<'idle' | 'confirming' | 'deleting' | 'done'>('idle');
+  const screenFocused = useRef(false);
+  const parsedAmount = parseRupiahInput(amountStr);
+
+  useFocusEffect(useCallback(() => {
+    screenFocused.current = true;
+    return () => { screenFocused.current = false; };
+  }, []));
 
   useEffect(() => {
-    async function loadCategories() {
+    let active = true;
+    async function loadData() {
       try {
-        const list = await getCategories('expense');
-        setCategories(list);
-        if (list.length > 0) setSelectedCategoryId(list[0].id);
-      } catch (err) {
-        console.error('Failed to load categories for budget:', err);
+        const id = Number(params.id);
+        if (isEditing && (!Number.isSafeInteger(id) || id <= 0)) throw new Error('Budget tidak ditemukan.');
+        const [list, existing, activeBook] = await Promise.all([
+          getCategories('expense'),
+          isEditing ? getBudgetById(id) : Promise.resolve(null),
+          getDefaultBook(),
+        ]);
+        if (isEditing && !existing) throw new Error('Budget tidak ditemukan.');
+        if (!existing && !activeBook) throw new Error('Buku keuangan tidak ditemukan.');
+        if (active) {
+          setLoadError(null);
+          setCategories(list);
+          setBookId(existing?.book_id ?? activeBook!.id);
+          setSelectedCategoryId(existing?.category_id ?? list[0]?.id ?? null);
+          if (existing) { setMonth(existing.month); setAmountStr(String(existing.amount)); }
+        }
+      } catch (error: unknown) {
+        if (active) setLoadError(error instanceof Error ? error.message : 'Gagal memuat budget.');
+      } finally {
+        if (active) setLoadedKey(formKey);
       }
     }
-    loadCategories();
-  }, []);
+    void loadData();
+    return () => { active = false; };
+  }, [formKey, isEditing, params.id]);
 
   const handleSave = async () => {
+    if (!screenFocused.current || saving.current || loading || loadError || !bookId) return;
     if (!selectedCategoryId) {
       Alert.alert('Pilih Kategori', 'Silakan pilih kategori pengeluaran.');
       return;
     }
-    const amount = parseInt(amountStr, 10);
-    if (isNaN(amount) || amount <= 0) {
+    const amount = parsedAmount;
+    if (amount === null || amount <= 0) {
       Alert.alert('Nominal Tidak Valid', 'Masukkan nominal budget bulanan yang lebih besar dari 0.');
       return;
     }
-
-    setIsSaving(true);
-    try {
-      const book = await getDefaultBook();
-      if (!book) return;
-
-      await setBudget(book.id, selectedCategoryId, month, amount);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
-    } catch (err: any) {
-      Alert.alert('Gagal Menyimpan', err?.message || 'Terjadi kesalahan sistem.');
-    } finally {
-      setIsSaving(false);
+    if (!isValidMonthString(month)) {
+      Alert.alert('Bulan Tidak Valid', 'Masukkan bulan yang benar dengan format YYYY-MM.');
+      return;
     }
+
+    saving.current = true;
+    setIsSaving(true);
+    let saved = false;
+    try {
+      if (isEditing) await updateBudget(Number(params.id), { category_id: selectedCategoryId, month, amount });
+      else await setBudget(bookId, selectedCategoryId, month, amount);
+      saved = true;
+      if (screenFocused.current) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      }
+    } catch (err: any) {
+      if (screenFocused.current) Alert.alert('Gagal Menyimpan', err?.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      if (!saved) saving.current = false;
+      if (screenFocused.current) setIsSaving(false);
+    }
+  };
+
+  const handleDelete = () => {
+    if (!screenFocused.current || saving.current || !isEditing || loading || loadError) return;
+    saving.current = true;
+    deletePhase.current = 'confirming';
+    const cancel = () => {
+      if (deletePhase.current === 'confirming') { deletePhase.current = 'idle'; saving.current = false; }
+    };
+    Alert.alert('Hapus Budget', 'Batas budget ini akan dihapus. Riwayat transaksi tetap tersimpan.', [
+      { text: 'Batal', style: 'cancel', onPress: cancel },
+      { text: 'Hapus', style: 'destructive', onPress: async () => {
+        if (deletePhase.current !== 'confirming' || !screenFocused.current) { cancel(); return; }
+        deletePhase.current = 'deleting';
+        setIsDeleting(true);
+        let deleted = false;
+        try {
+          await deleteBudget(Number(params.id));
+          deleted = true;
+          if (screenFocused.current) router.back();
+        } catch (error: unknown) {
+          if (screenFocused.current) Alert.alert('Gagal Menghapus', error instanceof Error ? error.message : 'Silakan coba lagi.');
+        } finally {
+          deletePhase.current = deleted ? 'done' : 'idle';
+          if (!deleted) saving.current = false;
+          if (screenFocused.current) setIsDeleting(false);
+        }
+      } },
+    ], { cancelable: true, onDismiss: cancel });
   };
 
   return (
@@ -79,31 +157,28 @@ export default function AddBudgetScreen() {
 
       <View style={styles.headerContainer}>
         <LinearGradient
-          colors={[Colors.light.gradientStart, Colors.light.gradientEnd]}
+          colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.heroGradient, { paddingTop: topInset }]}
         >
           <View style={styles.topRow}>
-            <Pressable onPress={() => router.back()} style={styles.closeBtn}>
+            <Pressable onPress={() => router.back()} disabled={isSaving || isDeleting} style={styles.closeBtn}>
               <Icon name="close" size={20} color="#FFFFFF" />
             </Pressable>
-            <Text style={styles.screenTitle}>Atur Budget Bulanan</Text>
+            <Text style={styles.screenTitle}>{isEditing ? 'Edit Budget' : 'Atur Budget Bulanan'}</Text>
             <View style={{ width: 34 }} />
           </View>
         </LinearGradient>
       </View>
 
       <ScrollView style={styles.contentBody} contentContainerStyle={styles.scrollContent}>
+        {loading || loadError ? <Text style={styles.inputLabel}>{loading ? 'Memuat budget...' : loadError}</Text> : (
+          <>
         {/* Month */}
         <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>Bulan (YYYY-MM)</Text>
-          <TextInput
-            value={month}
-            onChangeText={setMonth}
-            placeholder="YYYY-MM"
-            style={styles.textInput}
-          />
+          <Text style={styles.inputLabel}>Bulan Budget</Text>
+          <DatePickerField value={month} onChange={setMonth} monthOnly label="Bulan Budget" />
         </View>
 
         {/* Category Picker */}
@@ -130,7 +205,7 @@ export default function AddBudgetScreen() {
                   <Text
                     style={[
                       styles.catNameText,
-                      sel && { color: Colors.light.primary, fontWeight: '600' },
+                      sel && { color: colors.primary, fontWeight: '600' },
                     ]}
                     numberOfLines={1}
                   >
@@ -150,35 +225,41 @@ export default function AddBudgetScreen() {
             onChangeText={setAmountStr}
             keyboardType="numeric"
             placeholder="Contoh: 1500000"
+            placeholderTextColor={colors.textMuted}
             style={[styles.textInput, styles.amountInput]}
           />
           {amountStr ? (
             <Text style={styles.formattedHint}>
-              {formatRupiah(parseInt(amountStr, 10) || 0)}
+              {parsedAmount === null ? 'Format nominal belum valid' : formatRupiah(parsedAmount)}
             </Text>
           ) : null}
         </View>
 
         <View style={styles.saveActionWrap}>
           <Button
-            title="Simpan Budget"
+            title={isEditing ? 'Simpan Perubahan' : 'Simpan Budget'}
             onPress={handleSave}
             loading={isSaving}
+            disabled={isDeleting}
             size="lg"
           />
+          {isEditing ? <Button title="Hapus Budget" variant="danger" onPress={handleDelete}
+            loading={isDeleting} disabled={isSaving} style={{ marginTop: 12 }} /> : null}
         </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.light.primaryDark,
+    backgroundColor: colors.primaryDark,
   },
   headerContainer: {
-    backgroundColor: Colors.light.primaryDark,
+    backgroundColor: colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
@@ -205,7 +286,7 @@ const styles = StyleSheet.create({
   },
   contentBody: {
     flex: 1,
-    backgroundColor: Colors.light.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     marginTop: -12,
@@ -222,28 +303,28 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.light.textSecondary,
+    color: colors.textSecondary,
     marginLeft: 2,
   },
   textInput: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.light.text,
+    color: colors.text,
   },
   amountInput: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.light.primary,
+    color: colors.primary,
   },
   formattedHint: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.light.success,
+    color: colors.success,
     marginLeft: 2,
   },
   categoriesGrid: {
@@ -253,7 +334,7 @@ const styles = StyleSheet.create({
   },
   catGridItem: {
     width: '22.5%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     paddingVertical: 10,
     paddingHorizontal: 4,
@@ -263,8 +344,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   catGridItemActive: {
-    borderColor: Colors.light.primary,
-    backgroundColor: '#F0F7FF',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
   },
   catIconWrap: {
     width: 38,
@@ -275,7 +356,7 @@ const styles = StyleSheet.create({
   },
   catNameText: {
     fontSize: 11,
-    color: Colors.light.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   saveActionWrap: {

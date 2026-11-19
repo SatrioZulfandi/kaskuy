@@ -1,26 +1,30 @@
 // src/db/seeds.ts
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-export async function seedInitialData(db: SQLiteDatabase): Promise<void> {
+export async function seedInitialData(db: SQLiteDatabase, repairMissing = false): Promise<void> {
   // 1. Cek apakah books sudah ada
   const existingBook = await db.getFirstAsync<{ count: number }>(
     'SELECT count(*) as count FROM books'
   );
 
-  if (existingBook && existingBook.count > 0) {
-    // Database sudah di-seed
+  if (existingBook && existingBook.count > 0 && !repairMissing) {
     return;
   }
 
-  // 2. Default Book
-  const bookResult = await db.runAsync(
-    `INSERT INTO books (name, is_default) VALUES (?, 1)`,
-    ['Buku Utama']
-  );
-  const bookId = bookResult.lastInsertRowId;
+  let bookId: number;
+  if (existingBook && existingBook.count > 0) {
+    const book = await db.getFirstAsync<{ id: number }>('SELECT id FROM books ORDER BY is_default DESC, id ASC LIMIT 1');
+    if (!book) throw new Error('Buku awal tidak ditemukan.');
+    bookId = book.id;
+  } else {
+    const bookResult = await db.runAsync(`INSERT INTO books (name, is_default) VALUES (?, 1)`, ['Buku Utama']);
+    bookId = bookResult.lastInsertRowId;
+  }
 
-  // 3. Default Wallets
-  await db.runAsync(
+  // Repair interrupted legacy seeds only where a complete group is missing.
+  // Existing wallet balances, category edits and dictionary corrections are kept.
+  const wallets = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM wallets WHERE book_id = ?', [bookId]);
+  if (!wallets?.count) await db.runAsync(
     `INSERT INTO wallets (book_id, name, type, balance, icon, color) VALUES
      (?, 'Uang Tunai', 'cash', 0, 'cash', '#10B981'),
      (?, 'Rekening Utama', 'bank', 0, 'bank', '#0066FF'),
@@ -28,9 +32,8 @@ export async function seedInitialData(db: SQLiteDatabase): Promise<void> {
     [bookId, bookId, bookId]
   );
 
-  // 4. Default Categories
-  // Expense
-  await db.runAsync(
+  const expenses = await db.getFirstAsync<{ count: number }>("SELECT COUNT(*) AS count FROM categories WHERE type = 'expense'");
+  if (!expenses?.count) await db.runAsync(
     `INSERT INTO categories (name, type, icon, color, sort_order, is_default) VALUES
      ('Makanan', 'expense', 'food', '#F59E0B', 1, 1),
      ('Belanja', 'expense', 'shop', '#EC4899', 2, 1),
@@ -42,8 +45,8 @@ export async function seedInitialData(db: SQLiteDatabase): Promise<void> {
      ('Lainnya', 'expense', 'other', '#6B7280', 8, 1)`
   );
 
-  // Income
-  await db.runAsync(
+  const incomes = await db.getFirstAsync<{ count: number }>("SELECT COUNT(*) AS count FROM categories WHERE type = 'income'");
+  if (!incomes?.count) await db.runAsync(
     `INSERT INTO categories (name, type, icon, color, sort_order, is_default) VALUES
      ('Gaji', 'income', 'salary', '#10B981', 1, 1),
      ('Bisnis', 'income', 'business', '#3B82F6', 2, 1),

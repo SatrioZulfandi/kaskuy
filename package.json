@@ -48,6 +48,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "test:finance": "node --test scripts/finance.test.cjs",
     "lint": "expo lint"
   },
   "private": true

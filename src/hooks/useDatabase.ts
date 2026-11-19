@@ -5,6 +5,7 @@ import { getDatabase } from '../db/database';
 export function useDatabase() {
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -27,8 +28,8 @@ export function useDatabase() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [attempt]);
 
-  return { isReady, error };
+  return { isReady, error, retry: () => { setError(null); setAttempt((count) => count + 1); } };
 }
 
