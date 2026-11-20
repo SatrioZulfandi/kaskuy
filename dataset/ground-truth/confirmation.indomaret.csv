@@ -1,0 +1,7 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes,candidate
+confirmation-indomaret-01,Indomaret,readable,2023-03-05,readable,37300,readable,,not_applicable,,not_applicable,verified,Identitas toko terbaca di footer. Pembayaran OVO NON TUNAI.,15
+confirmation-indomaret-02,Indomaret,readable,2024-01-06,readable,67800,readable,90000,readable,22200,readable,verified,Lipatan dan stiker berada di sekitar ringkasan. Tiga nominal pembayaran terbaca.,19
+confirmation-indomaret-03,Indomaret,readable,2024-02-01,readable,71800,readable,71800,readable,,not_applicable,verified,Struk bertanda COPY. Baris ANDA HEMAT mengikuti TUNAI.,20
+confirmation-indomaret-04,Indomaret,readable,2024-04-06,readable,160200,readable,,not_applicable,,not_applicable,verified,Pembayaran kartu debit tercetak pada baris NON TUNAI.,22
+confirmation-indomaret-05,Indomaret,readable,2022-05-11,readable,6500,readable,10000,readable,3500,readable,verified,Identitas toko terbaca di footer dan ringkasan pembayaran lengkap.,25
+confirmation-indomaret-06,Indomaret,readable,2024-11-10,readable,,unreadable,,unreadable,49800,readable,verified,Digit awal TOTAL dan TUNAI tertutup pantulan. HARGA JUAL terlihat dan KEMBALI terbaca.,26

@@ -49,6 +49,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test:finance": "node --test scripts/finance.test.cjs",
+    "test:ocr": "node --experimental-strip-types --test scripts/ocr-parser.test.cjs scripts/ocr-identity.test.cjs scripts/reconstruct-receipt-lines.test.cjs scripts/score-ocr-batch.test.cjs scripts/ocr-batch.test.cjs scripts/replay-ocr-batch.test.cjs",
+    "ocr:batch": "node scripts/ocr-batch.cjs",
+    "ocr:replay": "node --experimental-strip-types scripts/replay-ocr-batch.cjs",
     "lint": "expo lint"
   },
   "private": true

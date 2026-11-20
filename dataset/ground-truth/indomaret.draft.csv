@@ -1,0 +1,6 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes
+dev-indomaret-01,Indomaret,readable,,unreadable,24200,readable,100000,readable,75800,readable,draft,"Logo Indomaret Point. Lipatan di tepi kiri menutupi digit hari pada baris tanggal."
+dev-indomaret-02,Indomaret,readable,2023-06-04,readable,14200,readable,20000,readable,5800,readable,draft,"Foto menyamping. Tanggal tercetak 04.06.23."
+dev-indomaret-03,Indomaret,readable,2024-11-17,readable,46700,readable,100000,readable,53300,readable,draft,"Nilai TOTAL setelah potongan."
+dev-indomaret-04,Indomaret,readable,2024-08-26,readable,16000,readable,16000,readable,,not_applicable,draft,"Baris KEMBALI tidak tercetak. Tidak mengisi nol hasil hitungan."
+dev-indomaret-05,Indomaret,readable,2024-11-18,readable,24300,readable,50000,readable,25700,readable,draft,"Logo Indomaret Fresh."

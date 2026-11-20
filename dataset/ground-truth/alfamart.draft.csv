@@ -1,0 +1,6 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes
+dev-alfamart-01,Alfamart,readable,2023-12-22,readable,76100,readable,76100,readable,0,readable,draft,Total Belanja setelah diskon dan kembalian nol tercetak.
+dev-alfamart-02,Alfamart,readable,2024-05-11,readable,16200,readable,16500,readable,300,readable,draft,Sebagian awal label Total Item tertutup jari. Nominal tercetak jelas.
+dev-alfamart-03,Alfamart,readable,2024-07-14,readable,37800,readable,17300,readable,0,readable,draft,Pembayaran gabungan DANA QRIS Rp20500 dan tunai Rp17300. Field tunai mengikuti baris Tunai.
+dev-alfamart-04,Alfamart,readable,2020-02-01,readable,26600,readable,26600,readable,0,readable,draft,Merek dinormalisasi dari PT Sumber Alfaria Trijaya pada header. Awal label nominal terpotong.
+dev-alfamart-05,Alfamart,readable,2024-11-19,readable,,unreadable,,unreadable,,unreadable,draft,Ujung kanan kolom nominal terpotong. Digit terakhir pada total tunai dan kembalian belum dapat dipastikan.

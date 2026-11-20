@@ -1,0 +1,14 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes
+final-alfamidi-01,Alfamidi,readable,2020-08-22,readable,24100,readable,,not_applicable,0,readable,verified,Merek terlihat pada situs resmi dan nama badan usaha tercetak. Pembayaran ShopeePay dengan kembalian nol tercetak.
+final-alfamidi-02,Alfamidi,readable,2022-10-29,readable,65600,readable,65600,readable,0,readable,verified,Total Belanja setelah diskon dengan kembalian nol tercetak.
+final-alfamidi-03,Alfamidi,readable,2023-10-16,readable,23100,readable,,not_applicable,0,readable,verified,Pembayaran kartu prabayar dan kembalian nol tercetak.
+final-alfamidi-04,Alfamidi,readable,2021-12-27,readable,11200,readable,,not_applicable,0,readable,verified,Pembayaran ShopeePay. Cabang serta nomor bon dan waktu transaksi berbeda dari dev-alfamidi-04.
+final-alfamidi-05,Alfamidi,readable,2019-07-12,readable,29300,readable,50000,readable,20700,readable,verified,Total Belanja setelah diskon tercetak.
+final-alfamidi-06,Alfamidi,readable,2018-08-30,readable,37400,readable,48500,readable,11100,readable,verified,Total Belanja setelah diskon satu rupiah tercetak.
+final-alfamidi-07,Alfamidi,readable,2018-07-07,readable,176100,readable,200000,readable,23900,readable,verified,Total Belanja setelah diskon tercetak.
+final-alfamidi-08,Alfamidi,readable,2021-02-04,readable,25300,readable,,not_applicable,0,readable,verified,Pembayaran ShopeePay dan kembalian nol tercetak.
+final-alfamidi-09,Alfamidi,readable,2024-03-21,readable,65800,readable,70000,readable,4200,readable,verified,Total Belanja setelah diskon tercetak.
+final-alfamidi-10,Alfamidi,readable,2023-08-15,readable,42800,readable,50000,readable,7000,readable,verified,Total Item adalah total belanja tercetak. Terdapat top up kembalian Virgo Rp200 dan kembalian tunai tercetak Rp7000.
+final-alfamidi-11,Alfamidi,readable,,unreadable,6700,readable,10000,readable,3300,readable,verified,Jari menutupi hari dan bulan pada baris tanggal. Tahun dan nominal terlihat.
+final-alfamidi-12,Alfamidi,readable,2019-02-15,readable,27400,readable,50400,readable,23000,readable,verified,Tunai Rp50400 tercetak.
+final-alfamidi-13,Alfamidi,readable,2024-11-19,readable,17100,readable,20000,readable,2900,readable,verified,Total Item adalah total belanja tercetak. Nominal tercetak agak pudar dan dapat dibaca pada pembesaran.

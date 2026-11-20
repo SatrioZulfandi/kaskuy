@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { type ParsedReceipt, parseReceipt } from '../../lib/parseReceipt';
+import { readReceiptOcr } from '../../lib/receiptOcr';
 
 const ocr: any = (OcrModule as any).recognizeText
   ? OcrModule
@@ -58,9 +59,9 @@ export default function TestOcrScreen() {
       const start = Date.now();
       const result = await ocr.recognizeText(imageUri);
       setMs(Date.now() - start);
-      const t: string = result?.text ?? JSON.stringify(result, null, 2);
-      setText(t);
-      setParsed(parseReceipt(t));
+      const { rawText, reconstructedLines } = readReceiptOcr(result);
+      setText(rawText);
+      setParsed(parseReceipt(rawText, { reconstructedLines }));
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {

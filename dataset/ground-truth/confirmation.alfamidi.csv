@@ -1,0 +1,5 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes,candidate
+confirmation-alfamidi-01,Alfamidi,readable,2021-09-14,readable,27900,readable,,not_applicable,0,readable,verified,Pembayaran ShopeePay dan kembalian nol tercetak. Nomor bon dan waktu berbeda dari kandidat 61.,42
+confirmation-alfamidi-02,Alfamidi,readable,2019-11-02,readable,42700,readable,50000,readable,7300,readable,verified,Total Item adalah total tercetak sebelum baris Tunai.,45
+confirmation-alfamidi-03,Alfamidi,readable,,unreadable,54400,readable,,not_applicable,0,readable,verified,Pembayaran kartu prabayar. Bagian bawah foto terpotong sebelum baris tanggal. Nomor bon serta rincian belanja berbeda dari final-alfamidi-03.,59
+confirmation-alfamidi-04,Alfamidi,readable,2021-09-14,readable,27900,readable,,not_applicable,0,readable,verified,Pembayaran ShopeePay dan kembalian nol tercetak. Nomor bon dan waktu berbeda dari kandidat 42.,61

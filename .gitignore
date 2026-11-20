@@ -41,3 +41,7 @@ example
 # generated native folders
 /ios
 /android
+
+# Local receipt images and OCR outputs can contain receipt identifiers.
+/dataset/raw/
+/dataset/results/

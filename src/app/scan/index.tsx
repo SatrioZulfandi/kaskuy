@@ -35,6 +35,7 @@ import { getTodayDateString } from '../../lib/date';
 import { Haptics } from '../../lib/haptics';
 import { useTopInset } from '../../hooks/useTopInset';
 import { type ParsedReceipt, parseReceipt } from '../../lib/parseReceipt';
+import { readReceiptOcr } from '../../lib/receiptOcr';
 import type { Category, Wallet } from '../../types';
 
 const ocr: any = (OcrModule as any).recognizeText
@@ -96,8 +97,8 @@ export default function ScanScreen() {
       const ms = Date.now() - start;
       setDurationMs(ms);
 
-      const rawText: string = result?.text ?? JSON.stringify(result, null, 2);
-      const parsedData = parseReceipt(rawText);
+      const { rawText, reconstructedLines } = readReceiptOcr(result);
+      const parsedData = parseReceipt(rawText, { reconstructedLines });
       setParsed(parsedData);
 
       // Populate form

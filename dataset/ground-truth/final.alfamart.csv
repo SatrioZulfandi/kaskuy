@@ -1,0 +1,14 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes
+final-alfamart-01,Alfamart,readable,2023-07-25,readable,4400,readable,20000,readable,15600,readable,verified,Nominal Total Item adalah total tercetak sebelum baris Tunai.
+final-alfamart-02,Alfamart,readable,2024-01-17,readable,79500,readable,100000,readable,20500,readable,verified,Total Belanja setelah diskon. Digit akhir diperiksa pada pembesaran foto.
+final-alfamart-03,Alfamart,readable,2024-08-01,readable,42300,readable,,not_applicable,0,readable,verified,Pembayaran kartu debit tanpa baris Tunai. Kembalian nol tercetak.
+final-alfamart-04,Alfamart,readable,2024-05-23,readable,79200,readable,100000,readable,20800,readable,verified,Total Belanja setelah diskon. Anotasi merah di sebelah baris PPN.
+final-alfamart-05,Alfamart,readable,2023-02-01,readable,30500,readable,50000,readable,19500,readable,verified,Total Belanja setelah diskon.
+final-alfamart-06,Alfamart,readable,2020-03-24,readable,22500,readable,22500,readable,0,readable,verified,Merek Alfamart tercetak di bagian bawah. Kembalian nol tercetak.
+final-alfamart-07,Alfamart,readable,2024-11-19,readable,7800,readable,7800,readable,0,readable,verified,Total Belanja setelah diskon. Kembalian nol tercetak.
+final-alfamart-08,Alfamart,readable,2024-11-19,readable,28900,readable,28900,readable,0,readable,verified,Nominal Total Item adalah total tercetak. Kembalian nol tercetak.
+final-alfamart-09,Alfamart,readable,2023-02-04,readable,41700,readable,100000,readable,58300,readable,verified,Nominal Total Item adalah total tercetak sebelum baris Tunai.
+final-alfamart-10,Alfamart,readable,,unreadable,149600,readable,149600,readable,0,readable,verified,Foto terpotong setelah baris PPN sehingga tanggal tidak terlihat. Kembalian nol tercetak.
+final-alfamart-11,Alfamart,readable,2020-03-15,readable,102300,readable,102500,readable,200,readable,verified,Total Belanja setelah diskon. Kembalian Rp200 tercetak.
+final-alfamart-12,Alfamart,readable,2021-06-28,readable,250000,readable,,not_applicable,0,readable,verified,Merek dinormalisasi dari PT Sumber Alfaria Trijaya. Pembayaran voucher tanpa Tunai. Kembalian nol tercetak.
+final-alfamart-13,Alfamart,readable,2023-03-20,readable,59600,readable,100000,readable,40400,readable,verified,Nominal Total Item dan baris pembayaran diperiksa pada pembesaran foto.

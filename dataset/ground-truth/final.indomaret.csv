@@ -1,0 +1,15 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes
+final-indomaret-01,Indomaret,readable,2024-04-10,readable,,unreadable,,unreadable,,unreadable,verified,Foto terpotong pada baris TOTAL. HARGA JUAL tercetak Rp98000 dan baris pembayaran tidak terlihat.
+final-indomaret-02,Indomaret,readable,2022-03-15,readable,42400,readable,42400,readable,,not_applicable,verified,TUNAI diikuti rincian PPN. Baris KEMBALI tidak tercetak.
+final-indomaret-03,Indomaret,readable,2023-07-02,readable,41400,readable,50000,readable,8600,readable,verified,Baris ANDA HEMAT setelah KEMBALI mencantumkan nilai terpisah.
+final-indomaret-04,Indomaret,readable,2024-11-19,readable,7800,readable,8000,readable,200,readable,verified,KEMBALI tercetak Rp200 dan ANDA HEMAT tercetak Rp800 pada baris berikutnya.
+final-indomaret-05,Indomaret,readable,2024-10-21,readable,20600,readable,50000,readable,29400,readable,verified,Logo Indomaret Fresh. Nominal pembayaran terbaca meski kertas berlipat.
+final-indomaret-06,Indomaret,readable,2024-09-28,readable,9200,readable,,not_applicable,,not_applicable,verified,NON TUNAI Rp9200 dibayar melalui QR ShopeePay. Baris TUNAI dan KEMBALI tidak tercetak.
+final-indomaret-07,Indomaret,readable,2023-07-19,readable,35700,readable,35700,readable,,not_applicable,verified,Nominal dari transaksi utama pada bagian atas foto. Baris KEMBALI tidak tercetak.
+final-indomaret-08,Indomaret,readable,2024-04-26,readable,20000,readable,50000,readable,30000,readable,verified,TOTAL tercetak setelah potongan dan penambahan donasi pada daftar item.
+final-indomaret-09,Indomaret,readable,2024-08-26,readable,36300,readable,50000,readable,13700,readable,verified,Alamat cabang tertutup. Logo dan ringkasan pembayaran terbaca.
+final-indomaret-10,Indomaret,readable,2023-07-10,readable,5900,readable,5900,readable,,not_applicable,verified,TUNAI diikuti rincian PPN. Baris KEMBALI tidak tercetak.
+final-indomaret-11,Indomaret,readable,2024-11-10,readable,40600,readable,,unreadable,,unreadable,verified,Logo Indomaret Fresh. TOTAL sedikit pudar dan HARGA JUAL tercetak jelas. Akhiran nominal TUNAI dan KEMBALI tidak terbaca.
+final-indomaret-12,Indomaret,readable,2023-11-19,readable,,unreadable,,unreadable,,unreadable,verified,Logo Indomaret Point. Satu digit tiap nominal pembayaran hilang pada cetakan. Tanggal berasal dari baris transaksi.
+final-indomaret-13,Indomaret,readable,2023-04-26,readable,74100,readable,100000,readable,25900,readable,verified,TOTAL setelah potongan. Ringkasan pembayaran terbaca meski kertas berkerut.
+final-indomaret-14,Indomaret,readable,2021-10-21,readable,28900,readable,,not_applicable,,not_applicable,verified,NON TUNAI Rp28900 melalui i.saku. Baris TUNAI dan KEMBALI tidak tercetak.

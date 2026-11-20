@@ -1,0 +1,7 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes,candidate
+confirmation-alfamart-01,Alfamart,readable,2023-07-23,readable,25400,readable,30000,readable,4600,readable,verified,Total Belanja setelah diskon tercetak pada struk cabang Alipatan.,35
+confirmation-alfamart-02,Alfamart,readable,,unreadable,14900,readable,14900,readable,0,readable,verified,Tanggal tertutup jari. Foto kandidat 46 menunjukkan nomor bon dan transaksi yang sama.,40
+confirmation-alfamart-03,Alfamart,readable,2024-11-19,readable,,unreadable,,not_applicable,,unreadable,verified,Cetakan DUPLIKAT dikenali dari kode cabang dan kasir yang sama dengan struk Alfamart P Kemerdekaan TMG. Nomor bon dan waktu berbeda. Pembayaran transfer dan voucher. Ujung kanan total dan kembalian terpotong.,43
+confirmation-alfamart-04,Alfamart,readable,2021-05-26,readable,75500,readable,,not_applicable,0,readable,verified,Merek dinormalisasi dari PT Sumber Alfaria Trijaya. Pembayaran debit dan kembalian nol tercetak.,49
+confirmation-alfamart-05,Alfamart,readable,2024-11-19,readable,32900,readable,32900,readable,0,readable,verified,Struk cabang Dr. Soetomo TMG dengan nomor bon dan waktu berbeda dari struk lain di cabang yang sama.,56
+confirmation-alfamart-06,Alfamart,readable,2024-11-04,readable,18900,readable,20000,readable,1100,readable,verified,Merek terbaca di kepala struk Malaka Cipayung. Tepi kiri terpotong dan angka pada ringkasan pembayaran tetap terbaca.,60

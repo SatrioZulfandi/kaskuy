@@ -1,0 +1,6 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes
+dev-alfamidi-01,Alfamidi,readable,,unreadable,12800,readable,12800,readable,0,readable,draft,Tanggal tidak terlihat karena bagian bawah struk terpotong. Kembalian nol tercetak.
+dev-alfamidi-02,Alfamidi,readable,2023-03-22,readable,43300,readable,50000,readable,6700,readable,draft,Nominal Total Item adalah total tercetak sebelum baris pembayaran.
+dev-alfamidi-03,Alfamidi,readable,2020-06-17,readable,132100,readable,152000,readable,19900,readable,draft,Alfamidi Super. Total Belanja setelah diskon.
+dev-alfamidi-04,Alfamidi,readable,2021-12-27,readable,11200,readable,,not_applicable,0,readable,draft,Pembayaran ShopeePay dan tidak ada baris Tunai. Kembalian nol tercetak.
+dev-alfamidi-05,Alfamidi,readable,2024-05-04,readable,26000,readable,50000,readable,24000,readable,draft,Tepi kiri cetakan agak pudar. Nominal dan tanggal terlihat.

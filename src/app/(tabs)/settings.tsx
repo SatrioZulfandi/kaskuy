@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
 import { Icon } from '../../components/ui/Icon';
 import { useAppPreferences } from '../../contexts/AppPreferences';
@@ -62,6 +62,7 @@ export default function SettingsScreen() {
       <Text style={{ color: colors.text, fontWeight: '600', marginTop: 8 }}>Scan Struk</Text>
       {menu('scan', 'Scan Struk Belanja', 'Foto atau pilih struk dari galeri', () => router.push('/scan'))}
       {menu('camera', 'Penguji OCR', 'Periksa teks hasil pembacaan struk', () => router.push('/scan/test-ocr'))}
+      {__DEV__ && Platform.OS === 'android' && menu('chart', 'Uji Batch OCR', 'Jalankan batch dari runner komputer', () => router.push('/scan/batch-ocr'))}
       <Text style={{ color: colors.textMuted, fontSize: 12, textAlign: 'center', marginTop: 16 }}>Kaskuy v1.0.0 · Pencatatan keuangan offline</Text>
     </ScrollView>
   </View>;

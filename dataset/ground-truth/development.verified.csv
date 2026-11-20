@@ -1,0 +1,16 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes
+dev-alfamart-01,Alfamart,readable,2023-12-22,readable,76100,readable,76100,readable,0,readable,verified,Total Belanja setelah diskon dan kembalian nol tercetak.
+dev-alfamart-02,Alfamart,readable,2024-05-11,readable,16200,readable,16500,readable,300,readable,verified,Sebagian awal label Total Item tertutup jari. Nominal tercetak jelas.
+dev-alfamart-03,Alfamart,readable,2024-07-14,readable,37800,readable,17300,readable,0,readable,verified,Pembayaran gabungan DANA QRIS Rp20500 dan tunai Rp17300. Field tunai mengikuti baris Tunai.
+dev-alfamart-04,Alfamart,readable,2020-02-01,readable,26600,readable,26600,readable,0,readable,verified,Merek dinormalisasi dari PT Sumber Alfaria Trijaya pada header. Awal label nominal terpotong.
+dev-alfamart-05,Alfamart,readable,2024-11-19,readable,,unreadable,,unreadable,,unreadable,verified,Ujung kanan kolom nominal terpotong. Digit terakhir pada total tunai dan kembalian belum dapat dipastikan.
+dev-alfamidi-01,Alfamidi,readable,,unreadable,12800,readable,12800,readable,0,readable,verified,Tanggal tidak terlihat karena bagian bawah struk terpotong. Kembalian nol tercetak.
+dev-alfamidi-02,Alfamidi,readable,2023-03-22,readable,43300,readable,50000,readable,6700,readable,verified,Nominal Total Item adalah total tercetak sebelum baris pembayaran.
+dev-alfamidi-03,Alfamidi,readable,2020-06-17,readable,132100,readable,152000,readable,19900,readable,verified,Alfamidi Super. Total Belanja setelah diskon.
+dev-alfamidi-04,Alfamidi,readable,2021-12-27,readable,11200,readable,,not_applicable,0,readable,verified,Pembayaran ShopeePay dan tidak ada baris Tunai. Kembalian nol tercetak.
+dev-alfamidi-05,Alfamidi,readable,2024-05-04,readable,26000,readable,50000,readable,24000,readable,verified,Tepi kiri cetakan agak pudar. Nominal dan tanggal terlihat.
+dev-indomaret-01,Indomaret,readable,,unreadable,24200,readable,100000,readable,75800,readable,verified,Logo Indomaret Point. Lipatan di tepi kiri menutupi digit hari pada baris tanggal.
+dev-indomaret-02,Indomaret,readable,2023-06-04,readable,14200,readable,20000,readable,5800,readable,verified,Foto menyamping. Tanggal tercetak 04.06.23.
+dev-indomaret-03,Indomaret,readable,2024-11-17,readable,46700,readable,100000,readable,53300,readable,verified,Nilai TOTAL setelah potongan.
+dev-indomaret-04,Indomaret,readable,2024-08-26,readable,16000,readable,16000,readable,,not_applicable,verified,Baris KEMBALI tidak tercetak. Tidak mengisi nol hasil hitungan.
+dev-indomaret-05,Indomaret,readable,2024-11-18,readable,24300,readable,50000,readable,25700,readable,verified,Logo Indomaret Fresh.

@@ -1,0 +1,9 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes,candidate
+validation-indomaret-01,Indomaret,readable,2024-07-03,readable,7900,readable,7900,readable,,not_applicable,verified,Pembayaran pas. Baris ANDA HEMAT mengikuti TUNAI.,01
+validation-indomaret-02,Indomaret,readable,,unreadable,17000,readable,20000,readable,3000,readable,verified,Awal baris tanggal tertutup pita di tepi kiri. Nominal terbaca pada pembesaran.,02
+validation-indomaret-03,Indomaret,readable,2024-11-19,readable,22000,readable,22000,readable,,not_applicable,verified,Pembayaran pas. Baris CUKAI mengikuti TUNAI.,03
+validation-indomaret-04,Indomaret,readable,2024-10-08,readable,33700,readable,34000,readable,300,readable,verified,Digit pudar pada tanggal dan tunai diperiksa pada crop resolusi asli.,07
+validation-indomaret-05,Indomaret,readable,2023-03-18,readable,,unreadable,,unreadable,,unreadable,verified,Foto berhenti setelah daftar barang dan voucher sebelum ringkasan pembayaran.,09
+validation-indomaret-06,Indomaret,readable,2020-07-19,readable,57000,readable,57000,readable,,not_applicable,verified,TOTAL setelah voucher adalah 57000. Baris ANDA HEMAT mengikuti TUNAI.,10
+validation-indomaret-07,Indomaret,readable,2024-07-07,readable,55700,readable,100000,readable,44300,readable,verified,Ringkasan pembayaran terbaca lengkap.,12
+validation-indomaret-08,Indomaret,readable,2024-11-14,readable,25000,readable,25000,readable,,not_applicable,verified,Pembayaran pas. Baris ANDA HEMAT mengikuti TUNAI.,13

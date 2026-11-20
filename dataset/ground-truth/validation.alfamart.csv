@@ -1,0 +1,9 @@
+id,merchant,merchant_status,date,date_status,total,total_status,tunai,tunai_status,kembali,kembali_status,review_status,notes,candidate
+validation-alfamart-01,Alfamart,readable,2020-03-18,readable,14000,readable,14000,readable,0,readable,verified,Merek terbaca dari laman Alfamart pada bagian bawah. Kembalian nol tercetak.,04
+validation-alfamart-02,Alfamart,readable,2023-05-30,readable,66000,readable,100000,readable,34000,readable,verified,Identitas Alfamart dari informasi Alfagift dan layanan pelanggan. Total Belanja setelah diskon.,06
+validation-alfamart-03,Alfamart,readable,2024-11-01,readable,141600,readable,,not_applicable,0,readable,verified,Cetakan berlabel DUPLIKAT. Pembayaran debit tanpa baris Tunai dan kembalian nol tercetak.,11
+validation-alfamart-04,Alfamart,readable,2024-11-19,readable,12400,readable,12400,readable,0,readable,verified,Nominal Total Item adalah total yang tercetak. Nomor bon dan waktu berbeda dari struk lain di cabang yang sama.,14
+validation-alfamart-05,Alfamart,readable,,unreadable,,unreadable,,unreadable,,unreadable,verified,Foto terpotong setelah nominal Total Item. Total akhir dan bagian pembayaran serta tanggal tidak terlihat.,18
+validation-alfamart-06,Alfamart,readable,2024-11-19,readable,39800,readable,39800,readable,0,readable,verified,Merek tercantum pada keterangan kebijakan privasi anggota. Nomor bon dan waktu berbeda dari struk lain di cabang yang sama.,23
+validation-alfamart-07,Alfamart,readable,,unreadable,,unreadable,,unreadable,,unreadable,verified,Merek dinormalisasi dari PT Sumber Alfaria Trijaya. Foto berakhir pada daftar barang sebelum ringkasan pembayaran dan tanggal.,27
+validation-alfamart-08,Alfamart,readable,2018-10-15,readable,72400,readable,72400,readable,0,readable,verified,Total Belanja setelah diskon. Kembalian nol tercetak.,31
