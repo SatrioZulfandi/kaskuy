@@ -1,12 +1,11 @@
-import { useTheme, useThemedStyles } from '../../hooks/use-theme';
-// src/app/transaction/add.tsx
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -14,19 +13,21 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../components/ui/Button';
 import { DatePickerField } from '../../components/ui/DatePickerField';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
-import { Radius, Typography, type ThemeColors } from '../../constants/theme';
+import { Radius, Spacing, Typography, type ThemeColors } from '../../constants/theme';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import { getCategories } from '../../db/repositories/categoryRepo';
 import { createTransaction, getTransactionById, updateTransaction } from '../../db/repositories/transactionRepo';
 import { getWallets } from '../../db/repositories/walletRepo';
+import { useTheme, useThemedStyles } from '../../hooks/use-theme';
+import { useTopInset } from '../../hooks/useTopInset';
 import { formatRupiah } from '../../lib/currency';
 import { getTodayDateString, isValidDateString } from '../../lib/date';
 import { Haptics } from '../../lib/haptics';
-import { useTopInset } from '../../hooks/useTopInset';
 import type { Category, TransactionType, Wallet } from '../../types';
 
 const KEYPAD_KEYS = [
@@ -35,6 +36,9 @@ const KEYPAD_KEYS = [
   '7', '8', '9',
   '000', '0', '⌫',
 ];
+
+type FormField = 'amount' | 'date' | 'wallet' | 'category';
+type CategoryStatus = 'loading' | 'ready' | 'error';
 
 export default function AddTransactionScreen() {
   const colors = useTheme();
@@ -50,17 +54,29 @@ export default function AddTransactionScreen() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [selectedWalletId, setSelectedWalletId] = useState<number | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryStatus, setCategoryStatus] = useState<CategoryStatus>('loading');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [date, setDate] = useState<string>(getTodayDateString());
   const [note, setNote] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [bookId, setBookId] = useState<number | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const loading = loadedKey !== formKey;
   const ready = !loading && !loadError;
   const saving = useRef(false);
   const screenFocused = useRef(false);
+  const scrollView = useRef<ScrollView>(null);
+  const noteInput = useRef<TextInput>(null);
+  const fieldPositions = useRef<Partial<Record<FormField, number>>>({});
+  const amount = Number(amountStr);
+  const amountValid = Number.isSafeInteger(amount) && amount > 0;
+  const dateValid = isValidDateString(date);
+  const wallet = wallets.find((option) => option.id === selectedWalletId);
+  const category = categories.find((option) => option.id === selectedCategoryId && option.type === type);
 
   useFocusEffect(useCallback(() => {
     screenFocused.current = true;
@@ -82,17 +98,18 @@ export default function AddTransactionScreen() {
         const wList = allWallets.filter((wallet) => wallet.is_archived === 0 || wallet.id === existing?.wallet_id);
         if (!active) return;
         setLoadError(null);
+        setSaveError(null);
+        setShowValidation(false);
         setBookId(book.id);
         setType(initialType);
         setWallets(wList);
         setSelectedWalletId(existing?.wallet_id ?? wList[0]?.id ?? null);
         setCategories(cList);
+        setCategoryStatus('ready');
         setSelectedCategoryId(existing?.category_id ?? cList[0]?.id ?? null);
-        if (existing) {
-          setAmountStr(String(existing.amount));
-          setDate(existing.date);
-          setNote(existing.note ?? '');
-        }
+        setAmountStr(String(existing?.amount ?? 0));
+        setDate(existing?.date ?? getTodayDateString());
+        setNote(existing?.note ?? '');
       } catch (error: unknown) {
         if (active) setLoadError(error instanceof Error ? error.message : 'Gagal memuat transaksi.');
       } finally {
@@ -101,68 +118,55 @@ export default function AddTransactionScreen() {
     }
     void loadData();
     return () => { active = false; };
-  }, [formKey, isEditing, params.id, params.type]);
+  }, [formKey, isEditing, loadAttempt, params.id, params.type]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || categoryStatus !== 'loading') return;
     let active = true;
     const loadCategories = async () => {
       try {
         const list = await getCategories(type);
         if (!active) return;
         setCategories(list);
-        setSelectedCategoryId((selected) => list.some((category) => category.id === selected) ? selected : list[0]?.id ?? null);
+        setSelectedCategoryId(list[0]?.id ?? null);
+        setCategoryStatus('ready');
       } catch {
-        if (active) { setCategories([]); setSelectedCategoryId(null); Alert.alert('Gagal Memuat Kategori', 'Silakan pilih jenis transaksi kembali.'); }
+        if (active) setCategoryStatus('error');
       }
     };
     void loadCategories();
     return () => { active = false; };
-  }, [ready, type]);
+  }, [categoryStatus, ready, type]);
+
+  const handleTypeChange = (nextType: TransactionType) => {
+    if (!ready || saving.current || nextType === type) return;
+    setType(nextType);
+    setSelectedCategoryId(null);
+    setCategories([]);
+    setCategoryStatus('loading');
+    if (!isEditing) setAmountStr('0');
+  };
 
   const handleKeypadPress = (key: string) => {
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
-      // Ignore
-    }
-
-    if (key === '⌫') {
-      if (amountStr.length <= 1) {
-        setAmountStr('0');
-      } else {
-        setAmountStr(amountStr.slice(0, -1));
-      }
-      return;
-    }
-
-    if (amountStr === '0') {
-      if (key === '000' || key === '0') return;
-      setAmountStr(key);
-    } else {
-      const nextAmount = amountStr + key;
-      if (!Number.isSafeInteger(Number(nextAmount))) return;
-      setAmountStr(nextAmount);
-    }
+    if (saving.current) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAmountStr((current) => {
+      if (key === '⌫') return current.slice(0, -1) || '0';
+      if (current === '0') return key === '000' ? '0' : key;
+      const nextAmount = current + key;
+      return Number.isSafeInteger(Number(nextAmount)) ? nextAmount : current;
+    });
   };
 
   const handleSave = async () => {
-    if (!screenFocused.current || saving.current || loading || loadError || !bookId) return;
-    const numericAmount = Number(amountStr);
-    if (!Number.isSafeInteger(numericAmount) || numericAmount <= 0) {
-      Alert.alert('Nominal Kosong', 'Silakan masukkan jumlah nominal transaksi.');
-      return;
-    }
-    if (!selectedWalletId || !selectedCategoryId) {
-      Alert.alert('Belum Lengkap', 'Pilih dompet dan kategori.');
-      return;
-    }
-    if (!isValidDateString(date)) {
-      Alert.alert('Tanggal Tidak Valid', 'Masukkan tanggal yang benar dengan format YYYY-MM-DD.');
-      return;
-    }
-    if (!categories.some((category) => category.id === selectedCategoryId && category.type === type)) {
-      Alert.alert('Kategori Tidak Sesuai', 'Pilih kategori sesuai jenis transaksi.');
+    if (!screenFocused.current || saving.current || !ready || bookId === null || categoryStatus === 'loading') return;
+    Keyboard.dismiss();
+    setSaveError(null);
+    if (!amountValid || !dateValid || !wallet || !category) {
+      setShowValidation(true);
+      const firstInvalid: FormField = !amountValid ? 'amount' : !dateValid ? 'date' : !wallet ? 'wallet' : 'category';
+      const position = fieldPositions.current[firstInvalid] ?? 0;
+      scrollView.current?.scrollTo({ y: Math.max(0, position - Spacing.lg), animated: true });
       return;
     }
 
@@ -171,10 +175,10 @@ export default function AddTransactionScreen() {
     let saved = false;
     try {
       const values = {
-        wallet_id: selectedWalletId,
-        category_id: selectedCategoryId,
+        wallet_id: wallet.id,
+        category_id: category.id,
         type,
-        amount: numericAmount,
+        amount,
         note: note.trim() || null,
         date,
       };
@@ -183,11 +187,13 @@ export default function AddTransactionScreen() {
 
       saved = true;
       if (screenFocused.current) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.back();
       }
-    } catch (err: any) {
-      if (screenFocused.current) Alert.alert('Gagal Menyimpan', err?.message || 'Terjadi kesalahan sistem.');
+    } catch (error: unknown) {
+      if (screenFocused.current) {
+        setSaveError(error instanceof Error ? error.message : 'Coba simpan kembali.');
+      }
     } finally {
       if (!saved) saving.current = false;
       if (screenFocused.current) setIsSaving(false);
@@ -197,10 +203,8 @@ export default function AddTransactionScreen() {
   const isExpense = type === 'expense';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <KeyboardAvoidingView behavior="padding" style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={Platform.OS === 'android'} />
-
-      {/* Header */}
       <View style={styles.headerContainer}>
         <LinearGradient
           colors={[colors.gradientStart, colors.gradientEnd]}
@@ -209,44 +213,49 @@ export default function AddTransactionScreen() {
           style={[styles.heroGradient, { paddingTop: topInset }]}
         >
           <View style={styles.topRow}>
-            <Pressable onPress={() => router.back()} disabled={isSaving} style={styles.closeBtn}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Tutup formulir transaksi"
+              onPress={() => router.back()}
+              disabled={isSaving}
+              style={styles.headerButton}
+              hitSlop={Spacing.xs}
+            >
               <Icon name="close" size={20} color="#FFFFFF" />
             </Pressable>
-            <Text style={styles.screenTitle}>{isEditing ? 'Edit Transaksi' : 'Catat Transaksi'}</Text>
+            <Text accessibilityRole="header" style={styles.screenTitle}>
+              {isEditing ? 'Edit Transaksi' : 'Tambah Transaksi'}
+            </Text>
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Scan struk"
               disabled={isSaving}
-              onPress={() => router.push('/scan' as any)}
-              style={styles.scanShortcutBtn}
+              onPress={() => router.push('/scan')}
+              style={styles.headerButton}
+              hitSlop={Spacing.xs}
             >
               <Icon name="scan" size={18} color="#FFFFFF" strokeWidth={2} />
             </Pressable>
           </View>
 
-          {/* Type Toggle: Pengeluaran ↔ Pemasukan */}
           <View style={styles.toggleRow}>
             <Pressable
-              onPress={() => {
-                if (type === 'expense') return;
-                setType('expense');
-                setSelectedCategoryId(null);
-                setCategories([]);
-                if (!isEditing) setAmountStr('0');
-              }}
-              style={[styles.toggleBtn, isExpense && styles.toggleBtnActiveExp]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isExpense }}
+              disabled={!ready || isSaving}
+              onPress={() => handleTypeChange('expense')}
+              style={[styles.toggleBtn, isExpense && styles.toggleBtnActive]}
             >
               <Text style={[styles.toggleText, isExpense && styles.toggleTextActiveExp]}>
                 Pengeluaran
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => {
-                if (type === 'income') return;
-                setType('income');
-                setSelectedCategoryId(null);
-                setCategories([]);
-                if (!isEditing) setAmountStr('0');
-              }}
-              style={[styles.toggleBtn, !isExpense && styles.toggleBtnActiveInc]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !isExpense }}
+              disabled={!ready || isSaving}
+              onPress={() => handleTypeChange('income')}
+              style={[styles.toggleBtn, !isExpense && styles.toggleBtnActive]}
             >
               <Text style={[styles.toggleText, !isExpense && styles.toggleTextActiveInc]}>
                 Pemasukan
@@ -256,207 +265,271 @@ export default function AddTransactionScreen() {
         </LinearGradient>
       </View>
 
-      <ScrollView style={styles.contentBody} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        ref={scrollView}
+        style={styles.contentBody}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        onLayout={() => {
+          if (noteInput.current?.isFocused()) scrollView.current?.scrollToEnd({ animated: true });
+        }}
+      >
         {loading || loadError ? (
-          <Text style={styles.sectionLabel}>{loading ? 'Memuat transaksi...' : loadError}</Text>
+          <View style={styles.loadPanel}>
+            {loading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={colors.primary} />
+                <Text accessibilityLiveRegion="polite" style={styles.helperText}>Memuat transaksi…</Text>
+              </View>
+            ) : (
+              <>
+                <Text accessibilityLiveRegion="polite" style={styles.errorText}>{loadError}</Text>
+                <Button
+                  title="Coba Lagi"
+                  variant="outline"
+                  onPress={() => {
+                    setLoadedKey(null);
+                    setLoadAttempt((attempt) => attempt + 1);
+                  }}
+                />
+              </>
+            )}
+          </View>
         ) : (
           <>
-        {/* Amount Display with large font */}
-        <View style={styles.amountWrap}>
-          <Text
-            style={[
-              styles.amountText,
-              { color: isExpense ? colors.danger : colors.success },
-            ]}
-          >
-            {formatRupiah(parseInt(amountStr, 10) || 0)}
-          </Text>
-        </View>
-
-        {/* Wallet Picker */}
-        <View style={styles.sectionItem}>
-          <Text style={styles.sectionLabel}>Pilih Dompet</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillsScroll}>
-            {wallets.map((w) => {
-              const sel = selectedWalletId === w.id;
-              return (
-                <Pressable
-                  key={w.id}
-                  onPress={() => setSelectedWalletId(w.id)}
-                  style={[styles.walletPill, sel && styles.walletPillActive]}
-                >
-                  <Icon name={w.icon || 'wallet'} size={15} color={sel ? '#FFFFFF' : w.color} />
-                  <Text style={[styles.walletPillText, sel && styles.walletPillTextActive]}>
-                    {w.name}{w.is_archived ? ' (Arsip)' : ''}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Categories Grid Picker */}
-        <View style={styles.sectionItem}>
-          <Text style={styles.sectionLabel}>Pilih Kategori</Text>
-          <View style={styles.categoriesGrid}>
-            {categories.map((c) => {
-              const sel = selectedCategoryId === c.id;
-              return (
-                <Pressable
-                  key={c.id}
-                  onPress={() => setSelectedCategoryId(c.id)}
-                  style={[styles.catGridItem, sel && styles.catGridItemActive]}
-                >
-                  <View
-                    style={[
-                      styles.catIconWrap,
-                      { backgroundColor: `${c.color}15` },
-                      sel && { backgroundColor: c.color },
-                    ]}
-                  >
-                    <Icon
-                      name={c.icon || 'other'}
-                      size={20}
-                      color={sel ? '#FFFFFF' : c.color}
-                    />
-                  </View>
+            <View
+              style={styles.sectionItem}
+              onLayout={({ nativeEvent }) => { fieldPositions.current.amount = nativeEvent.layout.y; }}
+            >
+              <Text accessibilityRole="header" style={styles.sectionLabel}>Nominal</Text>
+              <View style={[
+                styles.amountCard,
+                showValidation && !amountValid && styles.invalidAmountCard,
+              ]}>
+                <View style={styles.amountWrap}>
                   <Text
-                    style={[
-                      styles.catNameText,
-                      sel && { color: colors.primary, fontWeight: '600' },
-                    ]}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.55}
                     numberOfLines={1}
+                    style={[styles.amountText, { color: isExpense ? colors.danger : colors.success }]}
                   >
-                    {c.name}
+                    {formatRupiah(amount)}
                   </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
+                  {showValidation && !amountValid && (
+                    <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+                      Masukkan nominal lebih dari Rp0.
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.keypadGrid}>
+                  {KEYPAD_KEYS.map((key) => (
+                    <Pressable
+                      key={key}
+                      accessibilityRole="button"
+                      accessibilityLabel={key === '⌫' ? 'Hapus digit terakhir' : key === '000' ? 'Tiga nol' : key}
+                      disabled={isSaving}
+                      onPress={() => handleKeypadPress(key)}
+                      style={({ pressed }) => [styles.keypadKey, pressed && styles.keypadKeyPressed]}
+                    >
+                      <Text style={[styles.keypadKeyText, key === '⌫' && { color: colors.danger }]}>{key}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
 
-        {/* Note & Date */}
-        <View style={styles.formCard}>
-          <View style={styles.inputRow}>
-            <Icon name="camera" size={18} color={colors.textMuted} />
-            <TextInput
-              value={note}
-              onChangeText={setNote}
-              placeholder="Tambah catatan (opsional)"
-              placeholderTextColor={colors.textMuted}
-              style={styles.noteInput}
-            />
-          </View>
+            <View
+              style={styles.sectionItem}
+              onLayout={({ nativeEvent }) => { fieldPositions.current.date = nativeEvent.layout.y; }}
+            >
+              <Text accessibilityRole="header" style={styles.sectionLabel}>Tanggal Transaksi</Text>
+              <DatePickerField value={date} onChange={setDate} label="Tanggal Transaksi" disabled={isSaving} />
+              {showValidation && !dateValid && (
+                <Text accessibilityLiveRegion="polite" style={styles.errorText}>Pilih tanggal di kalender.</Text>
+              )}
+            </View>
 
-          <View style={styles.divider} />
-
-          <View style={styles.dateField}>
-            <Text style={styles.sectionLabel}>Tanggal Transaksi</Text>
-            <DatePickerField value={date} onChange={setDate} label="Tanggal Transaksi" />
-          </View>
-        </View>
-
-        {/* Custom Keypad */}
-        <View style={styles.keypadCard}>
-          <View style={styles.keypadGrid}>
-            {KEYPAD_KEYS.map((key) => (
-              <Pressable
-                key={key}
-                onPress={() => handleKeypadPress(key)}
-                style={({ pressed }) => [
-                  styles.keypadKey,
-                  pressed && styles.keypadKeyPressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.keypadKeyText,
-                    key === '⌫' && { color: colors.danger },
-                  ]}
+            <View
+              style={styles.sectionItem}
+              onLayout={({ nativeEvent }) => { fieldPositions.current.wallet = nativeEvent.layout.y; }}
+            >
+              <Text accessibilityRole="header" style={styles.sectionLabel}>Dompet</Text>
+              {wallets.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  keyboardShouldPersistTaps="handled"
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.pillsContent}
                 >
-                  {key}
+                  {wallets.map((option) => {
+                    const selected = wallet?.id === option.id;
+                    return (
+                      <Pressable
+                        key={option.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        disabled={isSaving}
+                        onPress={() => setSelectedWalletId(option.id)}
+                        style={[styles.walletPill, selected && styles.walletPillActive]}
+                      >
+                        <Icon name={option.icon || 'wallet'} size={15} color={selected ? '#FFFFFF' : option.color} />
+                        <Text style={[styles.walletPillText, selected && styles.walletPillTextActive]}>
+                          {option.name}{option.is_archived ? ' (Arsip)' : ''}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              ) : (
+                <Text style={showValidation ? styles.errorText : styles.helperText}>
+                  Belum ada dompet aktif. Tambahkan dompet dari tab Dompet.
                 </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
+              )}
+              {showValidation && !wallet && wallets.length > 0 && (
+                <Text accessibilityLiveRegion="polite" style={styles.errorText}>Pilih dompet transaksi.</Text>
+              )}
+            </View>
 
-        {/* Save Button */}
-        <View style={styles.saveActionWrap}>
-          <Button
-            title={isEditing ? 'Simpan Perubahan' : 'Simpan Transaksi'}
-            onPress={handleSave}
-            loading={isSaving}
-            size="lg"
-          />
-        </View>
+            <View
+              style={styles.sectionItem}
+              onLayout={({ nativeEvent }) => { fieldPositions.current.category = nativeEvent.layout.y; }}
+            >
+              <Text accessibilityRole="header" style={styles.sectionLabel}>Kategori</Text>
+              {categoryStatus === 'loading' && (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text accessibilityLiveRegion="polite" style={styles.helperText}>Memuat kategori…</Text>
+                </View>
+              )}
+              {categoryStatus === 'error' && (
+                <View style={styles.sectionItem}>
+                  <Text accessibilityLiveRegion="polite" style={styles.errorText}>Kategori gagal dimuat.</Text>
+                  <Button title="Muat Ulang Kategori" variant="outline" size="sm" onPress={() => setCategoryStatus('loading')} />
+                </View>
+              )}
+              {categoryStatus === 'ready' && categories.length === 0 && (
+                <Text style={showValidation ? styles.errorText : styles.helperText}>
+                  Tambahkan kategori untuk jenis transaksi ini dari Pengaturan.
+                </Text>
+              )}
+              {categories.length > 0 && (
+                <View style={styles.categoriesGrid}>
+                  {categories.map((option) => {
+                    const selected = category?.id === option.id;
+                    return (
+                      <Pressable
+                        key={option.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={option.name}
+                        accessibilityState={{ selected }}
+                        disabled={isSaving}
+                        onPress={() => setSelectedCategoryId(option.id)}
+                        style={[styles.catGridItem, selected && styles.catGridItemActive]}
+                      >
+                        <View style={[
+                          styles.catIconWrap,
+                          { backgroundColor: selected ? option.color : `${option.color}15` },
+                        ]}>
+                          <Icon name={option.icon || 'other'} size={20} color={selected ? '#FFFFFF' : option.color} />
+                        </View>
+                        <Text style={[styles.catNameText, selected && styles.catNameTextActive]} numberOfLines={2}>
+                          {option.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+              {showValidation && !category && categories.length > 0 && (
+                <Text accessibilityLiveRegion="polite" style={styles.errorText}>Pilih kategori transaksi.</Text>
+              )}
+            </View>
+
+            <View style={styles.sectionItem}>
+              <Text accessibilityRole="header" style={styles.sectionLabel}>Catatan (opsional)</Text>
+              <TextInput
+                ref={noteInput}
+                accessibilityLabel="Catatan transaksi"
+                editable={!isSaving}
+                value={note}
+                onChangeText={setNote}
+                placeholder="Contoh: makan siang"
+                placeholderTextColor={colors.textSecondary}
+                style={styles.noteInput}
+              />
+            </View>
           </>
         )}
       </ScrollView>
-    </SafeAreaView>
+
+      {ready && (
+        <SafeAreaView edges={['bottom']} style={styles.footer}>
+          <View style={styles.footerContent}>
+            {saveError && (
+              <Text accessibilityLiveRegion="polite" style={styles.errorText}>Gagal menyimpan. {saveError}</Text>
+            )}
+            <Button
+              title={isSaving ? 'Menyimpan transaksi…' : isEditing ? 'Simpan Perubahan' : 'Simpan Transaksi'}
+              onPress={handleSave}
+              disabled={categoryStatus === 'loading'}
+              loading={isSaving}
+              size="lg"
+            />
+          </View>
+        </SafeAreaView>
+      )}
+    </KeyboardAvoidingView>
   );
 }
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
-  dateField: {
-    padding: 12,
-    gap: 8,
-  },
-  safeArea: {
+  screen: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: colors.background,
   },
   headerContainer: {
     backgroundColor: colors.primaryDark,
   },
   heroGradient: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 16 : 8,
-    paddingBottom: 20,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.xl,
   },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
-  closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   screenTitle: {
-    fontSize: Typography.header.fontSize,
-    fontWeight: Typography.header.fontWeight,
+    flex: 1,
+    ...Typography.title,
     color: '#FFFFFF',
-  },
-  scanShortcutBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    textAlign: 'center',
   },
   toggleRow: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: Radius.md,
-    padding: 3,
+    padding: Spacing.xs,
   },
   toggleBtn: {
     flex: 1,
-    paddingVertical: 8,
+    minHeight: 44,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: Radius.sm,
   },
-  toggleBtnActiveExp: {
-    backgroundColor: colors.surface,
-  },
-  toggleBtnActiveInc: {
+  toggleBtnActive: {
     backgroundColor: colors.surface,
   },
   toggleText: {
@@ -475,43 +548,70 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    marginTop: -12,
+    marginTop: -Spacing.md,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-    gap: 16,
-  },
-  amountWrap: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  amountText: {
-    fontSize: 34,
-    fontWeight: '700',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
+    gap: Spacing.lg,
   },
   sectionItem: {
-    gap: 8,
+    gap: Spacing.sm,
   },
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginLeft: 2,
+    ...Typography.subtitle,
+    color: colors.text,
   },
-  pillsScroll: {
+  helperText: {
+    ...Typography.body,
+    color: colors.textSecondary,
+  },
+  errorText: {
+    ...Typography.body,
+    color: colors.danger,
+  },
+  loadingRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  loadPanel: {
+    gap: Spacing.md,
+    padding: Spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: Radius.lg,
+  },
+  amountCard: {
+    backgroundColor: colors.surface,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  invalidAmountCard: {
+    borderColor: colors.danger,
+  },
+  amountWrap: {
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+  },
+  amountText: {
+    fontSize: 32,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  pillsContent: {
+    gap: Spacing.sm,
   },
   walletPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Spacing.sm,
     backgroundColor: colors.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: Spacing.md,
+    minHeight: 44,
     borderRadius: Radius.md,
-    marginRight: 8,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -531,59 +631,48 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: Spacing.sm,
   },
   catGridItem: {
     width: '22.5%',
     backgroundColor: colors.surface,
     borderRadius: Radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
     alignItems: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    gap: Spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   catGridItemActive: {
     borderColor: colors.primary,
     backgroundColor: colors.primaryLight,
   },
   catIconWrap: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   catNameText: {
-    fontSize: 11,
+    ...Typography.caption,
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  formCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 16,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 12,
+  catNameTextActive: {
+    color: colors.primary,
+    fontWeight: '600',
   },
   noteInput: {
-    flex: 1,
-    fontSize: 14,
+    ...Typography.body,
     color: colors.text,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderLight,
-  },
-  keypadCard: {
     backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    minHeight: 48,
+    paddingHorizontal: Spacing.md,
   },
   keypadGrid: {
     flexDirection: 'row',
@@ -591,7 +680,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   keypadKey: {
     width: '33.33%',
-    paddingVertical: 14,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderBottomWidth: 1,
@@ -606,8 +695,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  saveActionWrap: {
-    marginTop: 6,
+  footer: {
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  footerContent: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
   },
 });
 

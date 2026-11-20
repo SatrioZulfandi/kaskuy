@@ -4,8 +4,8 @@ import { MONTH_NAMES, formatReadableDate, getCurrentMonthString, getMonthRange, 
 import { useTheme } from '../../hooks/use-theme';
 import { Icon } from './Icon';
 
-export function DatePickerField({ value, onChange, monthOnly = false, label }: {
-  value: string; onChange: (value: string) => void; monthOnly?: boolean; label: string;
+export function DatePickerField({ value, onChange, monthOnly = false, label, disabled = false }: {
+  value: string; onChange: (value: string) => void; monthOnly?: boolean; label: string; disabled?: boolean;
 }) {
   const colors = useTheme();
   const [open, setOpen] = useState(false);
@@ -28,7 +28,7 @@ export function DatePickerField({ value, onChange, monthOnly = false, label }: {
   const dayCount = Number(getMonthRange(shownMonth).endDate.slice(-2));
   const offset = (new Date(year, month - 1, 1).getDay() + 6) % 7;
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${display}`} onPress={openPicker} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 15, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${display}`} accessibilityState={{ disabled }} disabled={disabled} onPress={openPicker} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 15, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface }}>
       <Text style={{ color: colors.text }}>{display}</Text><Icon name="chevDown" color={colors.primary} size={18} />
     </Pressable>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
