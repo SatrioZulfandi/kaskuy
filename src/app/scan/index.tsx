@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { BatikPattern } from '../../components/decorative/BatikPattern';
+import { ReceiptCamera } from '../../components/scan/ReceiptCamera';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
@@ -50,7 +51,7 @@ export default function ScanScreen() {
   const [parsed, setParsed] = useState<ParsedReceipt | null>(null);
   const [durationMs, setDurationMs] = useState<number>(0);
   const [isOpeningPicker, setIsOpeningPicker] = useState(false);
-  const hasOpenedPicker = useRef(false);
+  const [isFocused, setIsFocused] = useState(false);
   const pickerBusy = useRef(false);
   const screenFocused = useRef(false);
 
@@ -136,8 +137,7 @@ export default function ScanScreen() {
   }, [initOptions]);
 
   const pickImage = useCallback(async (source: 'camera' | 'gallery') => {
-    if (pickerBusy.current) return;
-    hasOpenedPicker.current = true;
+    if (pickerBusy.current || !screenFocused.current) return;
     pickerBusy.current = true;
     setIsOpeningPicker(true);
     try {
@@ -193,20 +193,26 @@ export default function ScanScreen() {
   useFocusEffect(
     useCallback(() => {
       screenFocused.current = true;
-      // Let the scan modal finish opening before presenting the native camera.
-      // Web browsers require a direct button press instead of automatic opening.
-      const timeout = Platform.OS !== 'web' && !hasOpenedPicker.current
-        ? setTimeout(() => {
-            if (!hasOpenedPicker.current) void pickImage('camera');
-          }, 350)
-        : undefined;
+      setIsFocused(true);
 
       return () => {
         screenFocused.current = false;
-        if (timeout !== undefined) clearTimeout(timeout);
+        setIsFocused(false);
       };
-    }, [pickImage])
+    }, [])
   );
+
+  const closeScan = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }, []);
+
+  const handleCapture = useCallback(async (uri: string) => {
+    if (screenFocused.current && !pickerBusy.current) await processImage(uri);
+  }, [processImage]);
+
+  const openGallery = useCallback(() => pickImage('gallery'), [pickImage]);
+  const openSystemCamera = useCallback(() => pickImage('camera'), [pickImage]);
 
   const handleSaveTransaction = async () => {
     if (!total || isNaN(Number(total)) || Number(total) <= 0) {
@@ -269,7 +275,7 @@ export default function ScanScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Berhasil Disimpan', 'Transaksi struk berhasil dicatat ke dompet Anda.', [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: closeScan },
       ]);
     } catch (err: any) {
       Alert.alert('Gagal Menyimpan', err?.message || 'Terjadi kesalahan sistem.');
@@ -277,6 +283,18 @@ export default function ScanScreen() {
       setIsSaving(false);
     }
   };
+
+  if (!imageUri && !isProcessing) {
+    return (
+      <ReceiptCamera
+        active={isFocused && !isOpeningPicker}
+        onCapture={handleCapture}
+        onGallery={openGallery}
+        onClose={closeScan}
+        onSystemCamera={openSystemCamera}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -292,77 +310,20 @@ export default function ScanScreen() {
         >
           <BatikPattern opacity={0.07} color="#FFFFFF" />
           <View style={styles.topRow}>
-            <Pressable onPress={() => router.back()} style={styles.navCloseBtn}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Tutup scan struk" onPress={closeScan} style={styles.navCloseBtn}>
               <Icon name="close" size={20} color="#FFFFFF" />
             </Pressable>
-            <Text style={styles.screenTitle}>Scan Struk Belanja</Text>
+            <Text style={styles.screenTitle}>{isProcessing ? 'Scan Struk' : 'Konfirmasi Struk'}</Text>
             <View style={{ width: 34 }} />
           </View>
-          <Text style={styles.screenSubtitle}>
-            Ekstraksi otomatis on-device dengan koreksi Levenshtein
-          </Text>
         </LinearGradient>
       </View>
 
       <ScrollView style={styles.contentBody} contentContainerStyle={styles.scrollContent}>
-        {/* State 1: Belum ada gambar */}
-        {!imageUri && !isProcessing && (
-          <View style={styles.introWrap}>
-            <View style={styles.actionButtonsRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Buka kamera untuk memotret struk"
-                disabled={isOpeningPicker}
-                onPress={() => pickImage('camera')}
-                style={({ pressed }) => [
-                  styles.captureCard,
-                  pressed && styles.captureCardPressed,
-                ]}
-              >
-                <View style={[styles.captureIconWrap, { backgroundColor: '#EBF3FF' }]}>
-                  <Icon name="camera" size={32} color={Colors.light.primary} />
-                </View>
-                <Text style={styles.captureTitle}>Foto Kamera</Text>
-                <Text style={styles.captureDesc}>Ambil foto struk langsung</Text>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Pilih foto struk dari galeri"
-                disabled={isOpeningPicker}
-                onPress={() => pickImage('gallery')}
-                style={({ pressed }) => [
-                  styles.captureCard,
-                  pressed && styles.captureCardPressed,
-                ]}
-              >
-                <View style={[styles.captureIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                  <Icon name="scan" size={32} color={Colors.light.warning} strokeWidth={2} />
-                </View>
-                <Text style={styles.captureTitle}>Pilih Galeri</Text>
-                <Text style={styles.captureDesc}>Unggah dari foto tersimpan</Text>
-              </Pressable>
-            </View>
-
-            {/* Petunjuk Riset */}
-            <View style={styles.tipsCard}>
-              <Text style={styles.tipsHeading}>Tips Akurasi Maksimal</Text>
-              <Text style={styles.tipsItem}>• Untuk memilih galeri, tutup kamera lalu tekan Pilih Galeri di halaman ini.</Text>
-              <Text style={styles.tipsItem}>• Pastikan pencahayaan cukup dan struk tidak terlipat.</Text>
-              <Text style={styles.tipsItem}>• Posisikan kamera sejajar tegak lurus dengan struk.</Text>
-              <Text style={styles.tipsItem}>• Gunakan fitur crop untuk memperjelas area total & rincian.</Text>
-            </View>
-          </View>
-        )}
-
-        {/* State 2: Sedang Memproses */}
         {isProcessing && (
           <View style={styles.processingWrap}>
             <ActivityIndicator size="large" color={Colors.light.primary} />
-            <Text style={styles.processingTitle}>Mengekstraksi Teks Struk...</Text>
-            <Text style={styles.processingDesc}>
-              Menjalankan OCR on-device, rekonstruksi koordinat baris, dan koreksi Levenshtein.
-            </Text>
+            <Text style={styles.processingTitle}>Membaca struk…</Text>
           </View>
         )}
 
@@ -512,7 +473,6 @@ export default function ScanScreen() {
                     setImageUri(null);
                     setParsed(null);
                     setScanResultId(null);
-                    void pickImage('camera');
                   }}
                   size="md"
                   style={{ marginTop: 10 }}
@@ -560,11 +520,6 @@ const styles = StyleSheet.create({
     fontWeight: Typography.header.fontWeight,
     color: '#FFFFFF',
   },
-  screenSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-  },
   contentBody: {
     flex: 1,
     backgroundColor: Colors.light.background,
@@ -577,72 +532,6 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 40,
   },
-  introWrap: {
-    gap: 20,
-  },
-  actionButtonsRow: {
-    flexDirection: 'column',
-    gap: 14,
-  },
-  captureCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: 20,
-    alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  captureCardPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  captureIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  captureTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  captureDesc: {
-    fontSize: 11,
-    color: Colors.light.textMuted,
-    textAlign: 'center',
-  },
-  tipsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.light.primary,
-    gap: 6,
-  },
-  tipsHeading: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 4,
-  },
-  tipsItem: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    lineHeight: 18,
-  },
   processingWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -653,13 +542,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
-  },
-  processingDesc: {
-    fontSize: 13,
-    color: Colors.light.textMuted,
-    textAlign: 'center',
-    maxWidth: 280,
-    lineHeight: 18,
   },
   resultWrap: {
     gap: 16,
