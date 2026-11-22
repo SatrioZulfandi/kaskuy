@@ -47,8 +47,8 @@ export default function SettingsScreen() {
         <Text style={{ color: colors.text }}>Tema aplikasi</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {([['system', 'Sistem'], ['light', 'Terang'], ['dark', 'Gelap']] as const).map(([value, label]) => (
-            <Pressable key={value} disabled={themeBusy} onPress={() => { void changeTheme(value); }} accessibilityRole="radio" accessibilityState={{ checked: theme === value, disabled: themeBusy }} style={{ flex: 1, alignItems: 'center', padding: 12, borderRadius: 10, backgroundColor: theme === value ? colors.primary : colors.background }}>
-              <Text style={{ color: theme === value ? '#FFFFFF' : colors.text }}>{label}</Text>
+            <Pressable key={value} disabled={themeBusy} onPress={() => { void changeTheme(value); }} accessibilityRole="radio" accessibilityState={{ checked: theme === value, disabled: themeBusy }} style={{ flex: 1, alignItems: 'center', padding: 12, borderRadius: 10, backgroundColor: theme === value ? colors.selectionBackground : colors.background }}>
+              <Text style={{ color: theme === value ? colors.selectionText : colors.text }}>{label}</Text>
             </Pressable>
           ))}
         </View>

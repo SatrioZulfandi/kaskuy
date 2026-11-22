@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { CATEGORY_ICON_NAMES, createCategory, deleteCategory, getCategories, updateCategory } from '../../db/repositories/categoryRepo';
 import { useTopInset } from '../../hooks/useTopInset';
 import type { Category, CategoryType } from '../../types';
@@ -14,7 +15,8 @@ const CATEGORY_COLORS = ['#0066FF', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', 
 
 export default function ManageCategoriesScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const { colorScheme } = useAppPreferences();
+  const styles = useThemedStyles(colorScheme === 'dark' ? createDarkStyles : createLightStyles);
   const topInset = useTopInset(12);
   const [categories, setCategories] = useState<Category[]>([]);
   const [type, setType] = useState<CategoryType>('expense');
@@ -97,7 +99,7 @@ export default function ManageCategoriesScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
-      <LinearGradient style={[styles.header, { paddingTop: topInset }]}>
+      <LinearGradient variant="header" style={[styles.header, { paddingTop: topInset }]}>
         <View style={styles.headerRow}>
           <Pressable accessibilityRole="button" accessibilityLabel="Kembali" onPress={() => router.back()} style={styles.backButton}>
             <Icon name="chevLeft" size={22} color="#FFFFFF" />
@@ -172,22 +174,25 @@ export default function ManageCategoriesScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.primaryDark },
-  header: { paddingHorizontal: 20, paddingBottom: 24 },
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: isDark ? colors.gradientStart : colors.primaryDark },
+  header: { paddingHorizontal: 20, paddingBottom: isDark ? Radius.xl + 12 : 24 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.full, backgroundColor: 'rgba(255,255,255,0.15)' },
   headerTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', flex: 1 },
   headerSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 18, marginTop: 10 },
-  body: { flex: 1, backgroundColor: colors.background, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl, marginTop: -12 },
+  body: { flex: 1, backgroundColor: colors.background, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl, marginTop: isDark ? -Radius.xl : -12 },
   content: { padding: 20, paddingBottom: 40, gap: 14 },
   card: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: 16, gap: 12, borderWidth: 1, borderColor: colors.borderLight },
   sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
   typeRow: { flexDirection: 'row', gap: 8 },
   typeButton: { flex: 1, borderRadius: Radius.sm, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
-  selectedType: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  selectedType: { borderColor: isDark ? colors.selectionBackground : colors.primary, backgroundColor: isDark ? colors.selectionBackground : colors.primaryLight },
   typeText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  selectedTypeText: { color: colors.primary },
+  selectedTypeText: { color: isDark ? colors.selectionText : colors.primary },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 12, color: colors.text, fontSize: 15, backgroundColor: colors.surface },
   hint: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 },
   fieldLabel: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },

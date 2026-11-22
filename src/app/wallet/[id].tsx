@@ -20,6 +20,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, Typography, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { getTransactions } from '../../db/repositories/transactionRepo';
 import { deleteWallet, getWalletById, getWalletSummary, updateWallet } from '../../db/repositories/walletRepo';
 import { formatReadableDate } from '../../lib/date';
@@ -31,7 +32,8 @@ const PAGE_SIZE = 50;
 
 export default function WalletDetailScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const isDark = useAppPreferences().colorScheme === 'dark';
+  const styles = useThemedStyles(isDark ? createDarkStyles : createLightStyles);
   const topInset = useTopInset(12);
   const { id } = useLocalSearchParams<{ id: string }>();
   const [wallet, setWallet] = useState<Wallet | null>(null);
@@ -201,7 +203,7 @@ export default function WalletDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, styles.loadingArea]}>
         <View style={styles.center}>
           <Text style={styles.loadingText}>Memuat detail dompet...</Text>
         </View>
@@ -211,7 +213,7 @@ export default function WalletDetailScreen() {
 
   if (!wallet) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, styles.loadingArea]}>
         <View style={styles.center}>
           <Text style={styles.loadingText}>{loadError || 'Dompet tidak ditemukan.'}</Text>
           <Button title="Kembali" onPress={() => router.back()} style={{ marginTop: 12 }} />
@@ -226,6 +228,7 @@ export default function WalletDetailScreen() {
 
       <View style={styles.headerContainer}>
         <LinearGradient
+          variant="header"
           colors={[wallet.color || colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -242,8 +245,11 @@ export default function WalletDetailScreen() {
           </View>
 
           <View style={styles.balanceCard}>
-            <BatikPattern opacity={0.07} color="#FFFFFF" />
-            <Text style={styles.balanceSub}>{wallet.is_archived ? 'Saldo Dompet Arsip' : 'Saldo Saat Ini'}</Text>
+            <BatikPattern opacity={isDark ? 0.06 : 0.07} color="#FFFFFF" />
+            <View style={styles.balanceCaption}>
+              {isDark && <Icon name={wallet.icon || 'wallet'} size={14} color={wallet.color || colors.selectionBackground} />}
+              <Text style={styles.balanceSub}>{wallet.is_archived ? 'Saldo Dompet Arsip' : 'Saldo Saat Ini'}</Text>
+            </View>
             <AmountDisplay
               amount={wallet.balance}
               size="hero"
@@ -333,10 +339,16 @@ export default function WalletDetailScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientStart : colors.primaryDark,
+  },
+  loadingArea: {
+    backgroundColor: isDark ? colors.background : colors.primaryDark,
   },
   center: {
     flex: 1,
@@ -349,12 +361,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 14,
   },
   headerContainer: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientEnd : colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 16 : 8,
-    paddingBottom: 22,
+    paddingBottom: isDark ? Radius.xl + 10 : 22,
   },
   topRow: {
     flexDirection: 'row',
@@ -390,24 +402,29 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.09)' : 'rgba(255, 255, 255, 0.12)',
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.18)',
     position: 'relative',
     overflow: 'hidden',
+  },
+  balanceCaption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
   },
   balanceSub: {
     color: 'rgba(255, 255, 255, 0.75)',
     fontSize: 12,
-    marginBottom: 4,
   },
   contentBody: {
     flex: 1,
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    marginTop: -12,
+    marginTop: isDark ? -Radius.xl : -12,
     paddingHorizontal: 20,
     paddingTop: 20,
   },
@@ -475,7 +492,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   txSub: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
   },
 });
 

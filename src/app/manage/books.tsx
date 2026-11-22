@@ -6,13 +6,15 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { createBook, deleteBook, getAllBooks, setDefaultBook, updateBook } from '../../db/repositories/bookRepo';
 import { useTopInset } from '../../hooks/useTopInset';
 import type { Book } from '../../types';
 
 export default function ManageBooksScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const { colorScheme } = useAppPreferences();
+  const styles = useThemedStyles(colorScheme === 'dark' ? createDarkStyles : createLightStyles);
   const topInset = useTopInset(12);
   const [books, setBooks] = useState<Book[]>([]);
   const [newName, setNewName] = useState('');
@@ -85,7 +87,7 @@ export default function ManageBooksScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
-      <LinearGradient style={[styles.header, { paddingTop: topInset }]}>
+      <LinearGradient variant="header" style={[styles.header, { paddingTop: topInset }]}>
         <View style={styles.headerRow}>
           <Pressable accessibilityRole="button" accessibilityLabel="Kembali" onPress={() => router.back()} style={styles.backButton}>
             <Icon name="chevLeft" size={22} color="#FFFFFF" />
@@ -143,14 +145,17 @@ export default function ManageBooksScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: colors.primaryDark },
-  header: { paddingHorizontal: 20, paddingBottom: 24 },
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: isDark ? colors.gradientStart : colors.primaryDark },
+  header: { paddingHorizontal: 20, paddingBottom: isDark ? Radius.xl + 12 : 24 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.full, backgroundColor: 'rgba(255,255,255,0.15)' },
   headerTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', flex: 1 },
   headerSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 10, lineHeight: 18 },
-  body: { flex: 1, backgroundColor: colors.background, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl, marginTop: -12 },
+  body: { flex: 1, backgroundColor: colors.background, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl, marginTop: isDark ? -Radius.xl : -12 },
   content: { padding: 20, gap: 14, paddingBottom: 40 },
   card: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: 16, gap: 12, borderWidth: 1, borderColor: colors.borderLight },
   activeCard: { borderColor: colors.primary },

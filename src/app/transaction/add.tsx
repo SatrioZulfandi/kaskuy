@@ -19,6 +19,7 @@ import { DatePickerField } from '../../components/ui/DatePickerField';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, Spacing, Typography, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import { getCategories } from '../../db/repositories/categoryRepo';
 import { createTransaction, getTransactionById, updateTransaction } from '../../db/repositories/transactionRepo';
@@ -42,7 +43,8 @@ type CategoryStatus = 'loading' | 'ready' | 'error';
 
 export default function AddTransactionScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const { colorScheme } = useAppPreferences();
+  const styles = useThemedStyles(colorScheme === 'dark' ? createDarkStyles : createLightStyles);
   const topInset = useTopInset(12);
   const params = useLocalSearchParams<{ id?: string; type?: string }>();
   const isEditing = params.id !== undefined;
@@ -207,6 +209,7 @@ export default function AddTransactionScreen() {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={Platform.OS === 'android'} />
       <View style={styles.headerContainer}>
         <LinearGradient
+          variant="header"
           colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -373,7 +376,7 @@ export default function AddTransactionScreen() {
                         onPress={() => setSelectedWalletId(option.id)}
                         style={[styles.walletPill, selected && styles.walletPillActive]}
                       >
-                        <Icon name={option.icon || 'wallet'} size={15} color={selected ? '#FFFFFF' : option.color} />
+                        <Icon name={option.icon || 'wallet'} size={15} color={selected ? colors.selectionText : option.color} />
                         <Text style={[styles.walletPillText, selected && styles.walletPillTextActive]}>
                           {option.name}{option.is_archived ? ' (Arsip)' : ''}
                         </Text>
@@ -483,17 +486,20 @@ export default function AddTransactionScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
   },
   headerContainer: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientEnd : colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.xl,
+    paddingBottom: isDark ? Spacing.xl + Radius.xl - Spacing.md : Spacing.xl,
   },
   topRow: {
     flexDirection: 'row',
@@ -530,7 +536,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.sm,
   },
   toggleBtnActive: {
-    backgroundColor: colors.surface,
+    backgroundColor: isDark ? colors.selectionBackground : colors.surface,
   },
   toggleText: {
     color: 'rgba(255, 255, 255, 0.85)',
@@ -538,17 +544,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '600',
   },
   toggleTextActiveExp: {
-    color: colors.danger,
+    color: isDark ? colors.selectionText : colors.danger,
   },
   toggleTextActiveInc: {
-    color: colors.success,
+    color: isDark ? colors.selectionText : colors.success,
   },
   contentBody: {
     flex: 1,
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    marginTop: -Spacing.md,
+    marginTop: isDark ? -Radius.xl : -Spacing.md,
   },
   scrollContent: {
     paddingHorizontal: Spacing.xl,
@@ -616,8 +622,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.border,
   },
   walletPillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.selectionBackground,
+    borderColor: colors.selectionBackground,
   },
   walletPillText: {
     fontSize: 12,
@@ -625,7 +631,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
   },
   walletPillTextActive: {
-    color: '#FFFFFF',
+    color: colors.selectionText,
     fontWeight: '600',
   },
   categoriesGrid: {
@@ -645,7 +651,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.border,
   },
   catGridItemActive: {
-    borderColor: colors.primary,
+    borderColor: isDark ? colors.selectionBackground : colors.primary,
     backgroundColor: colors.primaryLight,
   },
   catIconWrap: {
@@ -661,7 +667,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     textAlign: 'center',
   },
   catNameTextActive: {
-    color: colors.primary,
+    color: isDark ? colors.selectionBackground : colors.primary,
     fontWeight: '600',
   },
   noteInput: {

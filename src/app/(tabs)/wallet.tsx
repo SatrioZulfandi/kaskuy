@@ -7,6 +7,7 @@ import { BatikPattern } from '../../components/decorative/BatikPattern';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import { getTotalBalance, getWallets } from '../../db/repositories/walletRepo';
 import { useTheme } from '../../hooks/use-theme';
@@ -18,6 +19,7 @@ const TYPE_LABELS = { cash: 'Uang Tunai', bank: 'Rekening Bank', ewallet: 'E-Wal
 
 export default function WalletScreen() {
   const colors = useTheme();
+  const isDark = useAppPreferences().colorScheme === 'dark';
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [total, setTotal] = useState(0);
   const [bookName, setBookName] = useState('Buku Aktif');
@@ -45,13 +47,13 @@ export default function WalletScreen() {
   const addWallet = () => router.push('/wallet/add');
   return <View style={{ flex: 1, backgroundColor: colors.background }}>
     <ScreenHeader title="Dompet Saya" subtitle={bookName} back={false} action={<Pressable accessibilityRole="button" accessibilityLabel="Tambah dompet" onPress={addWallet} style={{ padding: 8 }}><Icon name="plus" color="#FFFFFF" size={23} /></Pressable>} />
-    <View style={{ margin: 20, padding: 20, borderRadius: 18, backgroundColor: '#1B365D', overflow: 'hidden', gap: 8 }}>
-      <BatikPattern opacity={0.07} />
+    <View style={{ margin: 20, padding: 20, borderRadius: 18, backgroundColor: isDark ? colors.gradientStart : '#1B365D', overflow: 'hidden', gap: 8 }}>
+      <BatikPattern opacity={isDark ? 0.06 : 0.07} />
       <Text style={{ color: '#DDE9FF', fontSize: 12 }}>Total Saldo Dompet Aktif</Text>
       {loading || error ? <Text style={{ color: '#FFFFFF' }}>{loading ? 'Memuat saldo...' : 'Saldo belum dapat dimuat'}</Text> : <AmountDisplay amount={total} size="hero" style={{ color: '#FFFFFF' }} />}
     </View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 14 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
-      {FILTERS.map(([value, label]) => <Pressable key={value} onPress={() => setFilter(value)} accessibilityRole="tab" accessibilityState={{ selected: filter === value }} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: filter === value ? colors.primary : colors.surface }}><Text style={{ color: filter === value ? '#FFFFFF' : colors.text }}>{label}</Text></Pressable>)}
+      {FILTERS.map(([value, label]) => <Pressable key={value} onPress={() => setFilter(value)} accessibilityRole="tab" accessibilityState={{ selected: filter === value }} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: filter === value ? colors.selectionBackground : colors.surface }}><Text style={{ color: filter === value ? colors.selectionText : colors.text }}>{label}</Text></Pressable>)}
     </ScrollView>
     <FlatList data={loading || error ? [] : visible} keyExtractor={(wallet) => String(wallet.id)} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28, gap: 12 }} refreshing={loading} onRefresh={() => { void load(); }}
       ListEmptyComponent={loading ? <Text style={{ color: colors.textSecondary }}>Memuat dompet...</Text> : <EmptyState icon="wallet" title={error ? 'Dompet Belum Dapat Dimuat' : filter === 'archived' ? 'Belum Ada Dompet Arsip' : 'Belum Ada Dompet'} subtitle={error || (filter === 'archived' ? 'Dompet yang diarsipkan tetap menyimpan riwayat transaksi.' : 'Tambahkan dompet atau pilih filter lainnya.')} action={<Button title={error ? 'Coba Lagi' : 'Tambah Dompet'} onPress={error ? () => { void load(); } : addWallet} />} />}

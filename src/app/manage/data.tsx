@@ -139,7 +139,7 @@ export default function ManageDataScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar barStyle="light-content" />
-      <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} style={[styles.header, { paddingTop: topInset }]}>
+      <LinearGradient variant="header" colors={[colors.gradientStart, colors.gradientEnd]} style={[styles.header, { paddingTop: topInset }]}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Kembali" style={styles.backButton}>
             <Icon name="chevLeft" color="#FFFFFF" size={22} />
@@ -209,7 +209,7 @@ export default function ManageDataScreen() {
 }
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.primaryDark },
+  screen: { flex: 1, backgroundColor: colors.gradientStart },
   header: { paddingHorizontal: 20, paddingBottom: 22 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   backButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },

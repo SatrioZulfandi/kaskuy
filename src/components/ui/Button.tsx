@@ -9,6 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Radius, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 import { Haptics } from '../../lib/haptics';
 import { LinearGradient } from './LinearGradient';
@@ -38,6 +39,7 @@ export const Button: React.FC<ButtonProps> = ({
   style,
 }) => {
   const colors = useTheme();
+  const isDark = useAppPreferences().colorScheme === 'dark';
   const styles = useThemedStyles(createStyles);
   const variantStyles = useThemedStyles(createVariantStyles);
   const handlePress = () => {
@@ -51,13 +53,16 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const isGradient = variant === 'primary';
+  const foreground = variant === 'outline' || variant === 'secondary'
+    ? (isDark ? colors.selectionBackground : colors.primary)
+    : '#FFFFFF';
 
   const content = (
     <>
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'outline' || variant === 'secondary' ? colors.primary : '#FFFFFF'}
+          color={foreground}
           style={styles.spinner}
         />
       ) : (
@@ -68,8 +73,7 @@ export const Button: React.FC<ButtonProps> = ({
               styles.text,
               size === 'sm' && styles.textSm,
               size === 'lg' && styles.textLg,
-              variant === 'outline' && styles.textOutline,
-              variant === 'secondary' && styles.textSecondary,
+              { color: foreground },
             ]}
           >
             {title}
@@ -98,7 +102,7 @@ export const Button: React.FC<ButtonProps> = ({
           colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.container, sizeStyles[size]]}
+          style={[styles.container, sizeStyles[size], isDark && styles.primaryBorder]}
         >
           {content}
         </LinearGradient>
@@ -118,6 +122,7 @@ export const Button: React.FC<ButtonProps> = ({
         styles.container,
         sizeStyles[size],
         variantStyles[variant],
+        isDark && variant === 'danger' && styles.dangerDark,
         pressed && styles.pressed,
         disabled && styles.disabled,
         style,
@@ -171,6 +176,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  primaryBorder: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(175, 197, 234, 0.4)',
+  },
+  dangerDark: {
+    backgroundColor: colors.dangerLight,
+  },
   pressed: {
     transform: [{ scale: 0.98 }],
     opacity: 0.9,
@@ -185,7 +197,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginRight: 8,
   },
   text: {
-    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
   },
@@ -194,11 +205,5 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   textLg: {
     fontSize: 17,
-  },
-  textOutline: {
-    color: colors.primary,
-  },
-  textSecondary: {
-    color: colors.primary,
   },
 });

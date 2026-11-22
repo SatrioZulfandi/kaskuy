@@ -18,6 +18,7 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, Typography, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import {
   deleteTransaction,
   getTransactionById,
@@ -29,7 +30,8 @@ import type { TransactionWithDetails } from '../../types';
 
 export default function TransactionDetailScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const { colorScheme } = useAppPreferences();
+  const styles = useThemedStyles(colorScheme === 'dark' ? createDarkStyles : createLightStyles);
   const topInset = useTopInset(12);
   const { id } = useLocalSearchParams<{ id: string }>();
   const [tx, setTx] = useState<TransactionWithDetails | null>(null);
@@ -145,6 +147,7 @@ export default function TransactionDetailScreen() {
 
       <View style={styles.headerContainer}>
         <LinearGradient
+          variant="header"
           colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -259,10 +262,13 @@ export default function TransactionDetailScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientStart : colors.primaryDark,
   },
   center: {
     flex: 1,
@@ -275,12 +281,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 14,
   },
   headerContainer: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientEnd : colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 16 : 8,
-    paddingBottom: 24,
+    paddingBottom: isDark ? Radius.xl + 12 : 24,
   },
   topRow: {
     flexDirection: 'row',
@@ -323,7 +329,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    marginTop: -12,
+    marginTop: isDark ? -Radius.xl : -12,
     paddingHorizontal: 20,
     paddingTop: 24,
     gap: 20,
@@ -353,7 +359,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   rowLabel: {
     fontSize: 13,
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
   },
   rowValue: {
     fontSize: 14,

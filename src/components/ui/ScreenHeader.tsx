@@ -9,7 +9,7 @@ export function ScreenHeader({ title, subtitle, action, back = true }: {
   title: string; subtitle?: string; action?: React.ReactNode; back?: boolean;
 }) {
   const topInset = useTopInset(12);
-  return <LinearGradient colors={['#0052CC', '#1B365D']} style={{ paddingTop: topInset, paddingHorizontal: 20, paddingBottom: 20 }}>
+  return <LinearGradient variant="header" colors={['#0052CC', '#1B365D']} style={{ paddingTop: topInset, paddingHorizontal: 20, paddingBottom: 20 }}>
     <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={Platform.OS === 'android'} />
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       {back && <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Kembali" hitSlop={8} style={{ padding: 8 }}>

@@ -18,6 +18,7 @@ import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, Typography, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import { createWallet, getWalletById, updateWallet } from '../../db/repositories/walletRepo';
 import { formatRupiah, parseRupiahInput } from '../../lib/currency';
@@ -40,7 +41,9 @@ const ICONS = ['wallet', 'cash', 'bank', 'phone', 'creditCard', 'savings', 'busi
 
 export default function AddWalletScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const isDark = useAppPreferences().colorScheme === 'dark';
+  const styles = useThemedStyles(isDark ? createDarkStyles : createLightStyles);
+  const selectedTypeColor = isDark ? colors.selectionBackground : colors.primary;
   const topInset = useTopInset(12);
   const params = useLocalSearchParams<{ id?: string }>();
   const isEditing = params.id !== undefined;
@@ -138,6 +141,7 @@ export default function AddWalletScreen() {
 
       <View style={styles.headerContainer}>
         <LinearGradient
+          variant="header"
           colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -185,7 +189,7 @@ export default function AddWalletScreen() {
                   <Icon
                     name={t.icon}
                     size={22}
-                    color={sel ? colors.primary : colors.textSecondary}
+                    color={sel ? selectedTypeColor : colors.textSecondary}
                   />
                   <Text style={[styles.typeItemText, sel && styles.typeItemTextActive]}>
                     {t.label}
@@ -239,7 +243,7 @@ export default function AddWalletScreen() {
                     sel && styles.colorCircleActive,
                   ]}
                 >
-                  {sel && <Icon name="check" size={14} color="#FFFFFF" strokeWidth={2.5} />}
+                  {sel && <Icon name="check" size={14} color={isDark ? colors.selectionText : '#FFFFFF'} strokeWidth={2.5} />}
                 </Pressable>
               );
             })}
@@ -262,18 +266,21 @@ export default function AddWalletScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientStart : colors.primaryDark,
   },
   headerContainer: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientEnd : colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 16 : 8,
-    paddingBottom: 22,
+    paddingBottom: isDark ? Radius.xl + 10 : 22,
   },
   topRow: {
     flexDirection: 'row',
@@ -298,7 +305,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    marginTop: -12,
+    marginTop: isDark ? -Radius.xl : -12,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -341,7 +348,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.border,
   },
   typeItemActive: {
-    borderColor: colors.primary,
+    borderColor: isDark ? colors.selectionBackground : colors.primary,
     backgroundColor: colors.primaryLight,
   },
   typeItemText: {
@@ -350,7 +357,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary,
   },
   typeItemTextActive: {
-    color: colors.primary,
+    color: isDark ? colors.selectionBackground : colors.primary,
     fontWeight: '600',
   },
   colorRow: {
@@ -377,7 +384,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   colorCircleActive: {
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: isDark ? colors.selectionBackground : '#FFFFFF',
     ...Platform.select({
       ios: {
         shadowColor: '#000000',

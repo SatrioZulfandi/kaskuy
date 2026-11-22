@@ -1,4 +1,3 @@
-import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 // src/app/(tabs)/index.tsx
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
@@ -20,22 +19,25 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, Typography, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import {
   getSummary,
   getTransactions,
 } from '../../db/repositories/transactionRepo';
 import { getTotalBalance } from '../../db/repositories/walletRepo';
+import { useTheme, useThemedStyles } from '../../hooks/use-theme';
+import { useTopInset } from '../../hooks/useTopInset';
 import { formatReadableDate, getPeriodRange, shiftPeriodDate } from '../../lib/date';
 import { Haptics } from '../../lib/haptics';
-import { useTopInset } from '../../hooks/useTopInset';
 import type { Book, PeriodFilter, TransactionWithDetails } from '../../types';
 
 const PERIODS: PeriodFilter[] = ['Harian', 'Mingguan', 'Bulanan', 'Tahunan'];
 
 export default function HomeScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const isDark = useAppPreferences().colorScheme === 'dark';
+  const styles = useThemedStyles(isDark ? createDarkStyles : createLightStyles);
   const topInset = useTopInset(12);
   const [book, setBook] = useState<Book | null>(null);
   const [period, setPeriod] = useState<PeriodFilter>('Bulanan');
@@ -138,7 +140,7 @@ export default function HomeScreen() {
       {/* Top Header Card */}
       <View style={styles.headerContainer}>
         <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
+          variant="header"
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.heroGradient, { paddingTop: topInset }]}
@@ -188,7 +190,7 @@ export default function HomeScreen() {
 
           {/* Balance & Income/Expense Summary */}
           <View style={styles.summaryCard}>
-            <BatikPattern opacity={0.07} color="#FFFFFF" />
+            <BatikPattern opacity={isDark ? 0.06 : 0.07} color="#FFFFFF" />
             {loading || loadError ? (
               <Text style={styles.balanceSubtext}>{loading ? 'Memuat ringkasan...' : 'Ringkasan belum dapat dimuat.'}</Text>
             ) : (
@@ -310,7 +312,8 @@ export default function HomeScreen() {
                     {item.note || item.category_name}
                   </Text>
                   <Text style={styles.txSubtitle}>
-                    {item.category_name} · {item.wallet_name} · {formatReadableDate(item.date)}
+                    {item.category_name} · {item.wallet_name}
+                    {!isDark && ` · ${formatReadableDate(item.date)}`}
                   </Text>
                 </View>
 
@@ -319,6 +322,7 @@ export default function HomeScreen() {
                   type={isIncome ? 'income' : 'expense'}
                   showSign
                   size="md"
+                  style={styles.txAmount}
                 />
               </Pressable>
               </View>
@@ -330,18 +334,22 @@ export default function HomeScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientStart : colors.primaryDark,
   },
   headerContainer: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientEnd : colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 16 : 8,
-    paddingBottom: 22,
+    // Extend the gradient behind the entire curve of the history panel.
+    paddingBottom: isDark ? Radius.xl + 10 : 22,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -406,7 +414,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.sm,
   },
   periodPillActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: isDark ? colors.selectionBackground : '#FFFFFF',
     ...Platform.select({
       ios: {
         shadowColor: '#000000',
@@ -425,15 +433,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '500',
   },
   periodPillTextActive: {
-    color: colors.primaryDark,
+    color: isDark ? colors.selectionText : colors.primaryDark,
     fontWeight: '600',
   },
   summaryCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.09)' : 'rgba(255, 255, 255, 0.12)',
     borderRadius: Radius.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.18)',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -447,6 +455,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   heroBalanceText: {
     color: '#FFFFFF',
+    fontVariant: isDark ? ['tabular-nums'] : [],
     marginBottom: 14,
   },
   incomeExpenseRow: {
@@ -495,7 +504,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    marginTop: -12,
+    marginTop: isDark ? -Radius.xl : -12,
     paddingHorizontal: 20,
     paddingTop: 18,
   },
@@ -535,7 +544,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    ...Platform.select({
+    ...(isDark ? {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    } : Platform.select({
       ios: {
         shadowColor: '#000000',
         shadowOffset: { width: 0, height: 1 },
@@ -545,7 +557,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
       android: {
         elevation: 1,
       },
-    }),
+    })),
   },
   txItemPressed: {
     transform: [{ scale: 0.99 }],
@@ -569,7 +581,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   txSubtitle: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
+  },
+  txAmount: {
+    maxWidth: isDark ? '48%' : undefined,
+    flexShrink: isDark ? 1 : undefined,
+    fontVariant: isDark ? ['tabular-nums'] : [],
   },
 });
 

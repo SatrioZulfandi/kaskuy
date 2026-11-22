@@ -19,6 +19,7 @@ import { DatePickerField } from '../../components/ui/DatePickerField';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, Typography, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import { deleteBudget, getBudgetById, setBudget, updateBudget } from '../../db/repositories/budgetRepo';
 import { getCategories } from '../../db/repositories/categoryRepo';
@@ -30,7 +31,8 @@ import type { Category } from '../../types';
 
 export default function AddBudgetScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const isDark = useAppPreferences().colorScheme === 'dark';
+  const styles = useThemedStyles(isDark ? createDarkStyles : createLightStyles);
   const topInset = useTopInset(12);
   const params = useLocalSearchParams<{ id?: string; month?: string }>();
   const isEditing = params.id !== undefined;
@@ -157,6 +159,7 @@ export default function AddBudgetScreen() {
 
       <View style={styles.headerContainer}>
         <LinearGradient
+          variant="header"
           colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -197,15 +200,15 @@ export default function AddBudgetScreen() {
                     style={[
                       styles.catIconWrap,
                       { backgroundColor: `${c.color}15` },
-                      sel && { backgroundColor: c.color },
+                      sel && !isDark && { backgroundColor: c.color },
                     ]}
                   >
-                    <Icon name={c.icon || 'other'} size={20} color={sel ? '#FFFFFF' : c.color} />
+                    <Icon name={c.icon || 'other'} size={20} color={sel && !isDark ? '#FFFFFF' : c.color} />
                   </View>
                   <Text
                     style={[
                       styles.catNameText,
-                      sel && { color: colors.primary, fontWeight: '600' },
+                      sel && styles.catNameTextActive,
                     ]}
                     numberOfLines={1}
                   >
@@ -253,18 +256,21 @@ export default function AddBudgetScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientStart : colors.primaryDark,
   },
   headerContainer: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientEnd : colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 16 : 8,
-    paddingBottom: 22,
+    paddingBottom: isDark ? Radius.xl + 10 : 22,
   },
   topRow: {
     flexDirection: 'row',
@@ -289,7 +295,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    marginTop: -12,
+    marginTop: isDark ? -Radius.xl : -12,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -344,7 +350,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: 'transparent',
   },
   catGridItemActive: {
-    borderColor: colors.primary,
+    borderColor: isDark ? colors.selectionBackground : colors.primary,
     backgroundColor: colors.primaryLight,
   },
   catIconWrap: {
@@ -358,6 +364,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 11,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  catNameTextActive: {
+    color: isDark ? colors.selectionBackground : colors.primary,
+    fontWeight: '600',
   },
   saveActionWrap: {
     marginTop: 12,

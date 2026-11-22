@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { MONTH_NAMES, formatReadableDate, getCurrentMonthString, getMonthRange, isValidDateString, isValidMonthString } from '../../lib/date';
 import { useTheme } from '../../hooks/use-theme';
 import { Icon } from './Icon';
@@ -8,6 +9,7 @@ export function DatePickerField({ value, onChange, monthOnly = false, label, dis
   value: string; onChange: (value: string) => void; monthOnly?: boolean; label: string; disabled?: boolean;
 }) {
   const colors = useTheme();
+  const isDark = useAppPreferences().colorScheme === 'dark';
   const [open, setOpen] = useState(false);
   const [shownMonth, setShownMonth] = useState(getCurrentMonthString());
   const [year, month] = shownMonth.split('-').map(Number);
@@ -43,7 +45,19 @@ export function DatePickerField({ value, onChange, monthOnly = false, label, dis
           {monthOnly ? <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {MONTH_NAMES.map((name, index) => {
               const selected = `${year}-${String(index + 1).padStart(2, '0')}`;
-              return <Pressable key={name} onPress={() => choose(selected)} accessibilityRole="button" style={{ width: '33.333%', paddingVertical: 14, alignItems: 'center', borderRadius: 10, backgroundColor: selected === value ? colors.primaryLight : 'transparent' }}><Text style={{ color: colors.text }}>{name.slice(0, 3)}</Text></Pressable>;
+              const isSelected = selected === value;
+              const selectedBackground = isDark ? colors.selectionBackground : colors.primaryLight;
+              return (
+                <Pressable
+                  key={name}
+                  onPress={() => choose(selected)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  style={{ width: '33.333%', paddingVertical: 14, alignItems: 'center', borderRadius: 10, backgroundColor: isSelected ? selectedBackground : 'transparent' }}
+                >
+                  <Text style={{ color: isSelected && isDark ? colors.selectionText : colors.text }}>{name.slice(0, 3)}</Text>
+                </Pressable>
+              );
             })}
           </View> : <View>
             <View style={{ flexDirection: 'row' }}>{['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map((name) => <Text key={name} style={{ width: '14.285%', textAlign: 'center', color: colors.textMuted, fontSize: 12, paddingBottom: 8 }}>{name}</Text>)}</View>
@@ -52,7 +66,19 @@ export function DatePickerField({ value, onChange, monthOnly = false, label, dis
                 const day = index - offset + 1;
                 if (day < 1) return <View key={index} style={{ width: '14.285%', height: 42 }} />;
                 const selected = `${shownMonth}-${String(day).padStart(2, '0')}`;
-                return <Pressable key={index} onPress={() => choose(selected)} accessibilityRole="button" accessibilityLabel={formatReadableDate(selected)} style={{ width: '14.285%', height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: selected === value ? colors.primary : 'transparent' }}><Text style={{ color: selected === value ? '#FFFFFF' : colors.text }}>{day}</Text></Pressable>;
+                const isSelected = selected === value;
+                return (
+                  <Pressable
+                    key={index}
+                    onPress={() => choose(selected)}
+                    accessibilityRole="button"
+                    accessibilityLabel={formatReadableDate(selected)}
+                    accessibilityState={{ selected: isSelected }}
+                    style={{ width: '14.285%', height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: isSelected ? colors.selectionBackground : 'transparent' }}
+                  >
+                    <Text style={{ color: isSelected ? colors.selectionText : colors.text }}>{day}</Text>
+                  </Pressable>
+                );
               })}
             </View>
           </View>}

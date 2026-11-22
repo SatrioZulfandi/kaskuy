@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radius, Spacing, Typography } from '../../constants/theme';
+import { useTheme } from '../../hooks/use-theme';
 import { useTopInset } from '../../hooks/useTopInset';
 import { Icon } from '../ui/Icon';
 
@@ -42,6 +43,7 @@ export function ReceiptCamera({
   onClose,
   onSystemCamera,
 }: ReceiptCameraProps) {
+  const colors = useTheme();
   const topInset = useTopInset(12);
   const { bottom } = useSafeAreaInsets();
   const [foreground, setForeground] = useState(inForeground);
@@ -207,6 +209,7 @@ export function ReceiptCamera({
   const shutterDisabled = !showPreview || !ready || busy;
   const loading = cameraModule === undefined || (cameraModule !== null && permission === null);
   const showSystemCamera = Boolean(onSystemCamera && (cameraModule === null || previewFailed));
+  const secondaryActionStyle = [styles.secondaryAction, { backgroundColor: colors.gradientStart }];
 
   return (
     <View style={styles.screen}>
@@ -264,7 +267,7 @@ export function ReceiptCamera({
               {cameraModule && !permission?.granted ? (
                 <Pressable
                   accessibilityRole="button"
-                  style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
+                  style={({ pressed }) => [secondaryActionStyle, pressed && styles.pressed]}
                   onPress={requestPermission}
                 >
                   <Text style={styles.buttonText}>{permission?.canAskAgain ? 'Izinkan kamera' : 'Buka pengaturan'}</Text>
@@ -272,7 +275,7 @@ export function ReceiptCamera({
               ) : previewFailed && (
                 <Pressable
                   accessibilityRole="button"
-                  style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
+                  style={({ pressed }) => [secondaryActionStyle, pressed && styles.pressed]}
                   onPress={() => setPreviewFailed(false)}
                 >
                   <Text style={styles.buttonText}>Coba lagi</Text>
@@ -281,7 +284,7 @@ export function ReceiptCamera({
               {showSystemCamera && onSystemCamera && (
                 <Pressable
                   accessibilityRole="button"
-                  style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
+                  style={({ pressed }) => [secondaryActionStyle, pressed && styles.pressed]}
                   onPress={() => openExternal(onSystemCamera, 'Kamera sistem gagal dibuka.')}
                 >
                   <Text style={styles.buttonText}>Buka kamera sistem</Text>
@@ -396,7 +399,6 @@ const styles = StyleSheet.create({
   },
   shutterCenter: { width: 58, height: 58, borderRadius: Radius.full, backgroundColor: white },
   secondaryAction: {
-    backgroundColor: Colors.light.primaryDark,
     borderRadius: Radius.md,
     minHeight: 48,
     justifyContent: 'center',

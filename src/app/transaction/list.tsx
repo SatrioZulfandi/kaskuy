@@ -79,7 +79,7 @@ export default function TransactionListScreen() {
     } catch { if (request === version.current) setError('Transaksi berikutnya belum dapat dimuat. Coba lagi.'); }
     finally { moreLock.current = false; setLoadingMore(false); }
   };
-  const chip = (label: string, selected: boolean, onPress: () => void, key = label) => <Pressable key={key} onPress={onPress} accessibilityRole="button" accessibilityState={{ selected }} style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, backgroundColor: selected ? colors.primary : colors.surface }}><Text style={{ color: selected ? '#FFFFFF' : colors.text, fontSize: 12 }}>{label}</Text></Pressable>;
+  const chip = (label: string, selected: boolean, onPress: () => void, key = label) => <Pressable key={key} onPress={onPress} accessibilityRole="button" accessibilityState={{ selected }} style={{ paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, backgroundColor: selected ? colors.selectionBackground : colors.surface }}><Text style={{ color: selected ? colors.selectionText : colors.text, fontSize: 12 }}>{label}</Text></Pressable>;
   return <View style={{ flex: 1, backgroundColor: colors.background }}>
     <ScreenHeader title="Riwayat Transaksi" subtitle={params.title || 'Telusuri seluruh transaksi buku aktif'} action={<Pressable accessibilityRole="button" accessibilityLabel="Tambah transaksi" onPress={() => router.push('/transaction/add')} style={{ padding: 8 }}><Icon name="plus" color="#FFFFFF" size={23} /></Pressable>} />
     <View style={{ padding: 16, gap: 12 }}>

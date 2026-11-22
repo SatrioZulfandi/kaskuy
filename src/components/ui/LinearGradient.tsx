@@ -1,7 +1,8 @@
 // src/components/ui/LinearGradient.tsx
 import React from 'react';
-import { UIManager, View, type ViewProps, type ViewStyle } from 'react-native';
-import { useTheme } from '../../hooks/use-theme';
+import { UIManager, View, type ViewProps } from 'react-native';
+import { Colors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 
 let NativeLinearGradient: any = null;
 try {
@@ -20,23 +21,35 @@ try {
 
 type LinearGradientProps = ViewProps & {
   colors?: readonly [string, string, ...string[]] | string[];
+  variant?: 'header';
   start?: { x: number; y: number };
   end?: { x: number; y: number };
-  style?: ViewStyle | ViewStyle[];
   children?: React.ReactNode;
 };
 
 export const LinearGradient: React.FC<LinearGradientProps> = ({
   colors: gradientColors,
+  variant,
+  start,
+  end,
   style,
   children,
   ...rest
 }) => {
-  const colors = useTheme();
-  const gradient = gradientColors ?? [colors.gradientStart, colors.gradientEnd];
+  const { colorScheme } = useAppPreferences();
+  const colors = Colors[colorScheme];
+  const darkHeader = variant === 'header' && colorScheme === 'dark';
+  const themeGradient = [colors.gradientStart, colors.gradientEnd];
+  const gradient = darkHeader ? themeGradient : gradientColors ?? themeGradient;
   if (NativeLinearGradient) {
     return (
-      <NativeLinearGradient colors={gradient} style={style} {...rest}>
+      <NativeLinearGradient
+        colors={gradient}
+        start={darkHeader ? { x: 0, y: 0 } : start}
+        end={darkHeader ? { x: 0, y: 1 } : end}
+        style={style}
+        {...rest}
+      >
         {children}
       </NativeLinearGradient>
     );

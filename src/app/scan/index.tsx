@@ -26,6 +26,7 @@ import { DatePickerField } from '../../components/ui/DatePickerField';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, Spacing, Typography, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import { getCategories } from '../../db/repositories/categoryRepo';
 import { learnMerchantCorrection } from '../../db/repositories/merchantDictRepo';
@@ -50,7 +51,10 @@ type RequiredField = 'total' | 'date' | 'wallet' | 'category';
 
 export default function ScanScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const { colorScheme } = useAppPreferences();
+  const isDark = colorScheme === 'dark';
+  const styles = useThemedStyles(isDark ? createDarkStyles : createLightStyles);
+  const selectedOptionIcon = isDark ? colors.selectionText : colors.primary;
   const topInset = useTopInset(12);
   const bottomInset = useSafeAreaInsets().bottom;
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -339,6 +343,7 @@ export default function ScanScreen() {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={Platform.OS === 'android'} />
 
       <LinearGradient
+        variant="header"
         colors={[colors.gradientStart, colors.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -485,7 +490,7 @@ export default function ScanScreen() {
                               onPress={() => setSelectedWalletId(option.id)}
                               style={[styles.optionPill, selected && styles.optionPillActive]}
                             >
-                              <Icon name={option.icon || 'wallet'} size={16} color={selected ? colors.primary : option.color} />
+                              <Icon name={option.icon || 'wallet'} size={16} color={selected ? selectedOptionIcon : option.color} />
                               <Text style={[styles.optionText, selected && styles.optionTextActive]}>{option.name}</Text>
                             </Pressable>
                           );
@@ -519,7 +524,7 @@ export default function ScanScreen() {
                               onPress={() => setSelectedCategoryId(option.id)}
                               style={[styles.optionPill, selected && styles.optionPillActive]}
                             >
-                              <Icon name={option.icon || 'other'} size={16} color={selected ? colors.primary : option.color} />
+                              <Icon name={option.icon || 'other'} size={16} color={selected ? selectedOptionIcon : option.color} />
                               <Text style={[styles.optionText, selected && styles.optionTextActive]}>{option.name}</Text>
                             </Pressable>
                           );
@@ -584,7 +589,10 @@ export default function ScanScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -741,8 +749,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   optionPillActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    borderColor: isDark ? colors.selectionBackground : colors.primary,
+    backgroundColor: isDark ? colors.selectionBackground : colors.primaryLight,
   },
   optionText: {
     fontSize: 13,
@@ -750,6 +758,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
   },
   optionTextActive: {
+    color: isDark ? colors.selectionText : colors.text,
     fontWeight: '700',
   },
   footer: {

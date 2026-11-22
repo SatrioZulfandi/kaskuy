@@ -20,6 +20,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, Typography, type ThemeColors } from '../../constants/theme';
+import { useAppPreferences } from '../../contexts/AppPreferences';
 import { getDefaultBook } from '../../db/repositories/bookRepo';
 import {
   getBudgetSummary,
@@ -43,7 +44,8 @@ const TABS: ReportSubTab[] = ['Budget', 'Pengeluaran', 'Pemasukan', 'Tren', 'Eva
 
 export default function ReportScreen() {
   const colors = useTheme();
-  const styles = useThemedStyles(createStyles);
+  const isDark = useAppPreferences().colorScheme === 'dark';
+  const styles = useThemedStyles(isDark ? createDarkStyles : createLightStyles);
   const topInset = useTopInset(12);
   const [activeTab, setActiveTab] = useState<ReportSubTab>('Budget');
   const [currentMonth, setCurrentMonth] = useState<string>(getCurrentMonthString());
@@ -147,6 +149,7 @@ export default function ReportScreen() {
 
       <View style={styles.headerContainer}>
         <LinearGradient
+          variant="header"
           colors={[colors.gradientStart, colors.gradientEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -196,7 +199,7 @@ export default function ReportScreen() {
 
           {/* Sisa Budget / Hero overview */}
           <View style={styles.summaryCard}>
-            <BatikPattern opacity={0.07} color="#FFFFFF" />
+            <BatikPattern opacity={isDark ? 0.06 : 0.07} color="#FFFFFF" />
             <Text style={styles.summarySubtext}>
               {activeTab === 'Budget'
                 ? 'Sisa Budget Bulan Terpilih'
@@ -506,18 +509,21 @@ export default function ReportScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createLightStyles = (colors: ThemeColors) => createStyles(colors, false);
+const createDarkStyles = (colors: ThemeColors) => createStyles(colors, true);
+
+const createStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientStart : colors.primaryDark,
   },
   headerContainer: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: isDark ? colors.gradientEnd : colors.primaryDark,
   },
   heroGradient: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 16 : 8,
-    paddingBottom: 22,
+    paddingBottom: isDark ? Radius.xl + 10 : 22,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -562,7 +568,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   subTabPillActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: isDark ? colors.selectionBackground : '#FFFFFF',
   },
   subTabPillText: {
     color: 'rgba(255, 255, 255, 0.85)',
@@ -570,15 +576,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontWeight: '500',
   },
   subTabPillTextActive: {
-    color: colors.primaryDark,
+    color: isDark ? colors.selectionText : colors.primaryDark,
     fontWeight: '600',
   },
   summaryCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.09)' : 'rgba(255, 255, 255, 0.12)',
     borderRadius: Radius.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.18)',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -595,7 +601,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    marginTop: -12,
+    marginTop: isDark ? -Radius.xl : -12,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -618,7 +624,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   sectionSubtitle: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
     lineHeight: 16,
     marginBottom: 8,
   },
@@ -660,7 +666,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   budgetCatSub: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
     marginTop: 2,
   },
   budgetRightInfo: {
@@ -676,13 +682,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   budgetPct: {
     fontSize: 11,
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
     marginTop: 2,
   },
   progressBarTrack: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.borderLight,
+    backgroundColor: isDark ? colors.surfaceElevated : colors.borderLight,
     overflow: 'hidden',
   },
   progressBarFill: {
@@ -707,7 +713,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   breakdownCount: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
     marginTop: 2,
   },
   chartContainerCard: {
@@ -716,7 +722,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: 16,
   },
   emptyChartText: {
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
     fontSize: 13,
     textAlign: 'center',
     paddingVertical: 16,
@@ -756,7 +762,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   dailyLabel: {
     fontSize: 11,
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
   },
   monthlyRow: {
     flexDirection: 'row',
@@ -805,7 +811,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   statDesc: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: isDark ? colors.textSecondary : colors.textMuted,
     textAlign: 'center',
   },
   confidenceCard: {
