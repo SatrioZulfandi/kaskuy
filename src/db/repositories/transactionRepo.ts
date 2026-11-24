@@ -139,7 +139,7 @@ async function validateTransaction(
   }
 }
 
-export async function createTransaction(data: {
+type TransactionInput = {
   book_id: number;
   wallet_id: number;
   category_id: number;
@@ -148,31 +148,39 @@ export async function createTransaction(data: {
   note?: string | null;
   date: string;
   scan_result_id?: number | null;
-}): Promise<TransactionWithDetails> {
-  return withDatabaseTransaction(async (db) => {
-    await validateTransaction(db, data);
-    const result = await db.runAsync(
-      `INSERT INTO transactions (book_id, wallet_id, category_id, type, amount, note, date, scan_result_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        data.book_id,
-        data.wallet_id,
-        data.category_id,
-        data.type,
-        data.amount,
-        data.note ?? null,
-        data.date,
-        data.scan_result_id ?? null,
-      ]
-    );
+};
 
-    const delta = data.type === 'income' ? data.amount : -data.amount;
-    await applyWalletDelta(db, data.wallet_id, delta);
+/** Create a transaction and update its balance within the caller's write transaction. */
+export async function createTransactionInDatabase(
+  db: SQLiteDatabase,
+  data: TransactionInput
+): Promise<TransactionWithDetails> {
+  await validateTransaction(db, data);
+  const result = await db.runAsync(
+    `INSERT INTO transactions (book_id, wallet_id, category_id, type, amount, note, date, scan_result_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      data.book_id,
+      data.wallet_id,
+      data.category_id,
+      data.type,
+      data.amount,
+      data.note ?? null,
+      data.date,
+      data.scan_result_id ?? null,
+    ]
+  );
 
-    const created = await findTransaction(db, result.lastInsertRowId);
-    if (!created) throw new Error('Failed to retrieve created transaction');
-    return created;
-  });
+  const delta = data.type === 'income' ? data.amount : -data.amount;
+  await applyWalletDelta(db, data.wallet_id, delta);
+
+  const created = await findTransaction(db, result.lastInsertRowId);
+  if (!created) throw new Error('Failed to retrieve created transaction');
+  return created;
+}
+
+export async function createTransaction(data: TransactionInput): Promise<TransactionWithDetails> {
+  return withDatabaseTransaction((db) => createTransactionInDatabase(db, data));
 }
 
 export async function updateTransaction(

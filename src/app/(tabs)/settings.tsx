@@ -57,7 +57,7 @@ export default function SettingsScreen() {
       <Text style={{ color: colors.text, fontWeight: '600', marginTop: 8 }}>Keuangan</Text>
       {menu('wallet', 'Buku Keuangan', bookLabel, () => router.push('/manage/books'))}
       {menu('filter', 'Kelola Kategori', 'Tambah, ubah, dan hapus kategori pribadi', () => router.push('/manage/categories'))}
-      {menu('chart', 'Ekspor dan Cadangan', 'Bagikan CSV, buat cadangan, atau pulihkan data', () => router.push('/manage/data'))}
+      {menu('chart', 'Ekspor dan Cadangan', 'Ekspor Excel, simpan cadangan, atau pulihkan data', () => router.push('/manage/data'))}
       {menu('check', 'Panduan Kaskuy', 'Kenali cara mencatat dan mengelola keuangan', () => router.push('/onboarding'))}
       <Text style={{ color: colors.text, fontWeight: '600', marginTop: 8 }}>Scan Struk</Text>
       {menu('scan', 'Scan Struk Belanja', 'Foto atau pilih struk dari galeri', () => router.push('/scan'))}

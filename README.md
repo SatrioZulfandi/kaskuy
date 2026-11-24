@@ -13,16 +13,20 @@ Aplikasi keuangan pribadi offline untuk Android, menggunakan Expo SDK 57, Expo R
 - Budget bulanan per kategori: tambah/edit/hapus, progres aktual, dan peringatan saat hampir habis.
 - Tujuh dashboard non-OCR: ringkasan, pengeluaran/pemasukan per kategori, budget, tren harian/bulanan, dan detail dompet. Kategori dan grafik dapat dibuka untuk melihat transaksi terkait.
 - Tema sistem/terang/gelap yang tersimpan serta panduan penggunaan pertama.
-- Ekspor CSV seluruh transaksi buku aktif dan cadangan JSON seluruh data keuangan.
+- Ekspor Excel seluruh transaksi buku aktif dan cadangan SQLite seluruh data keuangan.
 - Pemulihan cadangan menambahkan buku baru dan mempertahankan data serta buku aktif yang sudah ada.
 
 Filter Dompet mencakup Semua, Tunai, Bank, E-Wallet, Kredit, dan Arsip. Saldo ringkasan hanya menjumlah dompet aktif.
 
 ## Ekspor dan cadangan
 
-Pada Android, CSV dan JSON dibagikan sebagai teks melalui menu berbagi bawaan; teks lengkap juga bisa diseleksi/disalin. Pada web tersedia unduhan berkas. Pemulihan dilakukan dengan menempelkan JSON, memeriksa ringkasan, lalu memilih **Pulihkan sebagai Buku Baru**.
+Di **Pengaturan → Ekspor dan Cadangan**, gunakan **Ekspor ke Excel** untuk menyimpan transaksi buku aktif sebagai `.xlsx` atau **Simpan Cadangan** untuk menyimpan semua buku sebagai `.sqlite`. Pada Android, pilih folder tujuan seperti Dokumen. Untuk memindahkan cadangan ke Google Drive, buka file tersebut dari pengelola file Android. Pada web, file diunduh melalui browser.
+
+Di HP tujuan, tekan **Pilih File Cadangan**, pilih file `.sqlite`, periksa tanggal, nama buku, dan jumlah transaksi, lalu tekan **Pulihkan Data**. Buku hasil pemulihan dapat dibuka setelah proses selesai.
 
 Cadangan ini berisi buku, dompet, kategori, transaksi, dan budget. Foto/log OCR serta preferensi tampilan tidak disertakan. Cadangan disimpan di luar aplikasi oleh pengguna; buat secara berkala, khususnya sebelum menghapus aplikasi atau berpindah perangkat.
+
+Saat aplikasi dijalankan lewat Metro dalam mode pengembangan, **Buku Contoh** dibuat dengan transaksi bulan berjalan. Aktifkan melalui **Pengaturan → Buku Keuangan** untuk mencoba laporan dan ekspor Excel.
 
 ## Status OCR
 

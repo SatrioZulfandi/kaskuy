@@ -20,8 +20,9 @@ function createHarness() {
   const connections = [];
   const cache = new Map();
   const bindings = (args) => args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
-  function createConnection() {
-    const nativeDb = new DatabaseSync(databasePath);
+  let byteFile = 0;
+  function createConnection(filename = databasePath) {
+    const nativeDb = new DatabaseSync(filename);
     let closed = false;
     const db = {
       async execAsync(sql) {
@@ -37,6 +38,11 @@ function createHarness() {
       },
       async getAllAsync(sql, ...args) {
         return nativeDb.prepare(sql).all(...bindings(args)).map((row) => ({ ...row }));
+      },
+      async serializeAsync(schema) {
+        const serializedPath = path.join(directory, `serialized-${++byteFile}.sqlite`);
+        nativeDb.prepare(`VACUUM ${schema} INTO ?`).run(serializedPath);
+        return fs.readFileSync(serializedPath);
       },
       async withTransactionAsync(task) {
         nativeDb.exec('BEGIN');
@@ -71,7 +77,16 @@ function createHarness() {
     cache.set(resolved, module);
     function localRequire(specifier) {
       if (specifier === 'expo-sqlite') {
-        return { openDatabaseAsync: async (_name, options) => options?.useNewConnection ? createConnection().db : reader.db };
+        return {
+          openDatabaseAsync: async (name, options, targetDirectory) => targetDirectory
+            ? createConnection(path.join(targetDirectory, name)).db
+            : options?.useNewConnection ? createConnection().db : reader.db,
+          deserializeDatabaseAsync: async (bytes) => {
+            const filename = path.join(directory, `deserialized-${++byteFile}.sqlite`);
+            fs.writeFileSync(filename, bytes);
+            return createConnection(filename).db;
+          },
+        };
       }
       if (specifier.startsWith('.')) {
         const target = path.resolve(path.dirname(resolved), specifier);
@@ -93,7 +108,7 @@ function createHarness() {
     for (const file of fs.readdirSync(directory)) fs.unlinkSync(path.join(directory, file));
     fs.rmdirSync(directory);
   }
-  return { db: reader.db, nativeDb: reader.nativeDb, load, close };
+  return { db: reader.db, nativeDb: reader.nativeDb, directory, load, close };
 }
 
 async function fixture(t) {
@@ -901,17 +916,18 @@ test('portability: CSV exports every transaction in the chosen book without page
 
 test('portability: additive restore remaps relations, preserves exact balances and the active book', async (t) => {
   const f = await fixture(t);
-  const backup = f.load('src/db/repositories/backupRepo.ts');
+  const backup = f.load('src/db/repositories/sqliteBackupRepo.ts');
   await f.transactions.createTransaction(f.entry({ amount: 25000, note: 'Belanja' }));
   await f.transactions.createTransaction(f.entry({ type: 'income', category_id: f.income.id, amount: 50000, note: 'Pendapatan' }));
   await f.budgets.setBudget(f.book.id, f.expense.id, '2026-11', 100000);
   await f.wallets.updateWallet(f.secondWallet.id, { is_archived: 1 });
   const originalTransactions = await f.db.getAllAsync('SELECT * FROM transactions ORDER BY id');
-  const source = await backup.createFinancialBackup();
-  const result = await backup.restoreFinancialBackup(source);
-  assert.deepEqual(result, { books: 1, wallets: 3, categories: 14, categoriesCreated: 0, transactions: 2, budgets: 1 });
+  const source = await backup.createSqliteBackup();
+  const { restoredBooks: firstRestoredBooks, ...counts } = await backup.restoreSqliteBackup(source);
+  assert.deepEqual(counts, { books: 1, wallets: 3, categories: 14, categoriesCreated: 0, transactions: 2, budgets: 1 });
   assert.equal((await f.books.getDefaultBook()).id, f.book.id);
   const importedBook = await f.db.getFirstAsync('SELECT * FROM books WHERE id<>?', [f.book.id]);
+  assert.deepEqual(firstRestoredBooks, [{ id: importedBook.id, name: importedBook.name }]);
   assert.match(importedBook.name, /Pemulihan/);
   assert.equal(importedBook.is_default, 0);
   const importedWallets = await f.wallets.getWallets(importedBook.id, true);
@@ -923,63 +939,58 @@ test('portability: additive restore remaps relations, preserves exact balances a
   assert.ok(importedTransactions.every((transaction) => transaction.book_id === importedBook.id && transaction.wallet_id === importedCash.id && transaction.scan_result_id === null));
   assert.equal((await f.budgets.getBudgetsWithProgress(importedBook.id, '2026-11'))[0].spent, 25000);
   assert.deepEqual(await f.db.getAllAsync('SELECT * FROM transactions WHERE book_id=? ORDER BY id', [f.book.id]), originalTransactions);
-  await backup.restoreFinancialBackup(source);
+  await backup.restoreSqliteBackup(source);
   const restoredBooks = await f.books.getAllBooks();
   assert.equal(restoredBooks.length, 3);
   assert.equal(new Set(restoredBooks.map((book) => book.name)).size, 3);
   assert.equal(await f.balance(), 125000);
 });
 
-test('portability: backup preserves long existing wallet names and notes within its overall size limit', async (t) => {
+test('portability: SQLite backup preserves long existing wallet names and notes', async (t) => {
   const f = await fixture(t);
   const name = 'Nama'.repeat(60);
   const note = 'x'.repeat(100001);
   const wallet = await f.wallets.createWallet(f.book.id, name, 'bank', 123000, 'bank', '#0066FF');
   await f.transactions.createTransaction(f.entry({ wallet_id: wallet.id, note }));
-  const repository = f.load('src/db/repositories/backupRepo.ts');
-  const backup = await repository.createFinancialBackup();
-  await repository.restoreFinancialBackup(backup);
+  const repository = f.load('src/db/repositories/sqliteBackupRepo.ts');
+  const backup = await repository.createSqliteBackup();
+  await repository.restoreSqliteBackup(backup);
   const restoredWallets = await f.db.getAllAsync('SELECT * FROM wallets WHERE name = ?', [name]);
   assert.equal(restoredWallets.length, 2);
   assert.equal(restoredWallets[0].balance, restoredWallets[1].balance);
   assert.equal((await f.db.getAllAsync('SELECT * FROM transactions WHERE note = ?', [note])).length, 2);
 });
 
-test('portability: malformed backup graph is rejected before any financial writes', async (t) => {
+test('portability: malformed SQLite backup data is rejected before any financial writes', async (t) => {
   const f = await fixture(t);
-  const backup = f.load('src/db/repositories/backupRepo.ts');
-  const { parseFinancialBackup } = f.load('src/lib/dataPortability.ts');
+  const backup = f.load('src/db/repositories/sqliteBackupRepo.ts');
   await f.transactions.createTransaction(f.entry());
   await f.budgets.setBudget(f.book.id, f.expense.id, '2026-11', 50000);
-  const good = JSON.parse(await backup.createFinancialBackup());
+  const good = await backup.createSqliteBackup();
+  const filename = 'malformed.sqlite';
+  const backupPath = path.join(f.directory, filename);
   const malformed = [
-    (data) => { data.version = 2; },
-    (data) => { data.format = 'another-app'; },
-    (data) => { data.books = []; },
-    (data) => { data.books.push({ ...data.books[0] }); },
-    (data) => { data.books[0].is_default = 0; },
-    (data) => { data.wallets[0].book_id = 999999; },
-    (data) => { data.wallets[0].balance = null; },
-    (data) => { data.wallets[0].balance = Number.MAX_SAFE_INTEGER + 1; },
-    (data) => { data.transactions[0].wallet_id = 999999; },
-    (data) => { data.transactions[0].category_id = f.income.id; },
-    (data) => { data.transactions[0].date = '2026-02-31'; },
-    (data) => { data.transactions[0].amount = -1000; },
-    (data) => { data.transactions[0].amount = 1.5; },
-    (data) => { data.transactions[0].note = {}; },
-    (data) => { data.transactions[0].created_at = '2026-02-31 00:00:00'; },
-    (data) => { data.budgets[0].month = '2026-13'; },
-    (data) => { data.budgets[0].category_id = f.income.id; },
-    (data) => { data.budgets.push({ ...data.budgets[0], id: 999 }); },
+    'PRAGMA application_id = 0',
+    'UPDATE books SET is_default = 0',
+    'UPDATE wallets SET book_id = 999999',
+    'UPDATE wallets SET balance = 9007199254740992',
+    'UPDATE transactions SET wallet_id = 999999',
+    "UPDATE transactions SET date = '2026-02-31'",
+    'UPDATE transactions SET amount = -1000',
+    "UPDATE budgets SET month = '2026-13'",
+    'UPDATE budgets SET category_id = (SELECT min(id) FROM categories WHERE type = \'income\')',
   ];
-  for (const modify of malformed) {
-    const data = structuredClone(good);
-    modify(data);
-    const source = JSON.stringify(data);
-    assert.throws(() => parseFinancialBackup(source), /Cadangan tidak valid/);
-    await assert.rejects(backup.restoreFinancialBackup(source), /Cadangan tidak valid/);
+  for (const sql of malformed) {
+    fs.writeFileSync(backupPath, good);
+    const broken = new DatabaseSync(backupPath);
+    try {
+      broken.exec('PRAGMA foreign_keys = OFF; PRAGMA ignore_check_constraints = ON;');
+      broken.exec(sql);
+    } finally {
+      broken.close();
+    }
+    await assert.rejects(backup.restoreSqliteBackupFile(filename, f.directory), /Cadangan tidak valid/, sql);
   }
-  assert.throws(() => parseFinancialBackup('{"broken":'), /JSON/);
   assert.equal((await f.books.getAllBooks()).length, 1);
   assert.equal(await f.count(), 1);
   assert.equal(await f.balance(), 90000);
@@ -987,37 +998,177 @@ test('portability: malformed backup graph is rejected before any financial write
 
 test('portability: restore rollback removes every new book, wallet, category and budget after a write failure', async (t) => {
   const f = await fixture(t);
-  const backup = f.load('src/db/repositories/backupRepo.ts');
+  const backup = f.load('src/db/repositories/sqliteBackupRepo.ts');
   await f.transactions.createTransaction(f.entry());
-  const source = JSON.parse(await backup.createFinancialBackup());
-  source.categories.push({ ...source.categories.find((category) => category.type === 'expense'), id: 9999, name: 'Kategori Baru dari Cadangan', is_default: 0 });
-  source.transactions[0].category_id = 9999;
+  await f.budgets.setBudget(f.book.id, f.expense.id, '2026-11', 50000);
+  const filename = 'rollback.sqlite';
+  await backup.createSqliteBackupFile(filename, f.directory);
+  const source = new DatabaseSync(path.join(f.directory, filename));
+  try {
+    source.exec(`
+      INSERT INTO categories (id, name, type, icon, color, sort_order, is_default)
+      SELECT 9999, 'Kategori Baru dari Cadangan', type, icon, color, sort_order, 0 FROM categories WHERE type = 'expense' LIMIT 1;
+      UPDATE transactions SET category_id = 9999;
+      UPDATE budgets SET category_id = 9999;
+    `);
+  } finally {
+    source.close();
+  }
   const counts = async () => Promise.all(['books', 'wallets', 'categories', 'transactions', 'budgets'].map(async (table) => (await f.db.getFirstAsync(`SELECT COUNT(*) n FROM ${table}`)).n));
   const before = await counts();
-  f.nativeDb.exec("CREATE TRIGGER fail_restore BEFORE INSERT ON transactions BEGIN SELECT RAISE(ABORT, 'simulated import failure'); END;");
-  await assert.rejects(backup.restoreFinancialBackup(JSON.stringify(source)), /simulated import failure/);
+  f.nativeDb.exec("CREATE TRIGGER fail_restore AFTER INSERT ON budgets BEGIN SELECT RAISE(ABORT, 'simulated import failure'); END;");
+  await assert.rejects(backup.restoreSqliteBackupFile(filename, f.directory), /simulated import failure/);
   assert.deepEqual(await counts(), before);
   assert.equal((await f.books.getDefaultBook()).id, f.book.id);
   assert.equal(await f.balance(), 90000);
   f.nativeDb.exec('DROP TRIGGER fail_restore');
-  await backup.restoreFinancialBackup(JSON.stringify(source));
+  await backup.restoreSqliteBackupFile(filename, f.directory);
   assert.equal((await f.books.getAllBooks()).length, 2);
 });
 
 test('portability: legacy categories with the same name keep separate transaction and budget relations', async (t) => {
   const f = await fixture(t);
-  const backup = f.load('src/db/repositories/backupRepo.ts');
+  const backup = f.load('src/db/repositories/sqliteBackupRepo.ts');
   await f.transactions.createTransaction(f.entry());
   await f.budgets.setBudget(f.book.id, f.expense.id, '2026-11', 50000);
-  const source = JSON.parse(await backup.createFinancialBackup());
-  source.categories.push({ ...source.categories.find((category) => category.id === f.expense.id), id: 9999, is_default: 0 });
-  source.transactions.push({ ...source.transactions[0], id: 9999, category_id: 9999 });
-  source.budgets.push({ ...source.budgets[0], id: 9999, category_id: 9999 });
-  const result = await backup.restoreFinancialBackup(JSON.stringify(source));
+  const filename = 'duplicate-category.sqlite';
+  await backup.createSqliteBackupFile(filename, f.directory);
+  const source = new DatabaseSync(path.join(f.directory, filename));
+  try {
+    source.prepare(`
+      INSERT INTO categories (id, name, type, icon, color, sort_order, is_default)
+      SELECT 9999, name, type, icon, color, sort_order, 0 FROM categories WHERE id = ?
+    `).run(f.expense.id);
+    source.exec(`
+      INSERT INTO transactions (id, book_id, wallet_id, category_id, type, amount, note, date, created_at, updated_at)
+      SELECT 9999, book_id, wallet_id, 9999, type, amount, note, date, created_at, updated_at FROM transactions;
+      INSERT INTO budgets (id, book_id, category_id, amount, month, created_at)
+      SELECT 9999, book_id, 9999, amount, month, created_at FROM budgets;
+    `);
+  } finally {
+    source.close();
+  }
+  const result = await backup.restoreSqliteBackupFile(filename, f.directory);
   assert.equal(result.categoriesCreated, 1);
   const importedBook = await f.db.getFirstAsync('SELECT id FROM books WHERE id<>?', [f.book.id]);
   const imported = await f.transactions.getTransactions(importedBook.id);
   assert.equal(new Set(imported.map((transaction) => transaction.category_id)).size, 2);
   assert.equal((await f.budgets.getBudgetsWithProgress(importedBook.id, '2026-11')).length, 2);
+});
+
+test('portability: SQLite file restores 100,000 transactions in batches with exact balance and budget', async (t) => {
+  const f = await fixture(t);
+  const backup = f.load('src/db/repositories/sqliteBackupRepo.ts');
+  const totalTransactions = 100_000;
+  const filename = 'Cadangan KASKUY.sqlite';
+  await f.db.runAsync(`
+    WITH RECURSIVE numbers(n) AS (VALUES (1) UNION ALL SELECT n + 1 FROM numbers WHERE n < ?)
+    INSERT INTO transactions (book_id, wallet_id, category_id, type, amount, note, date)
+    SELECT ?, ?, ?, 'expense', 1, 'Nomor ' || n, '2026-11-24' FROM numbers
+  `, [totalTransactions, f.book.id, f.wallet.id, f.expense.id]);
+  await f.wallets.updateWalletBalance(f.wallet.id, 1790);
+  const balance = await f.balance();
+  await f.budgets.setBudget(f.book.id, f.expense.id, '2026-11', 300_000);
+
+  await backup.createSqliteBackupFile(filename, f.directory);
+  const file = fs.readFileSync(path.join(f.directory, filename));
+  assert.equal(file.subarray(0, 16).toString('utf8'), 'SQLite format 3\0');
+  const exported = new DatabaseSync(path.join(f.directory, filename), { readOnly: true });
+  try {
+    assert.deepEqual(exported.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' ORDER BY name").all().map(({ name }) => name),
+      ['backup_info', 'books', 'budgets', 'categories', 'transactions', 'wallets']);
+  } finally {
+    exported.close();
+  }
+  const preview = await backup.inspectSqliteBackupFile(filename, f.directory);
+  assert.ok(Number.isFinite(Date.parse(preview.createdAt)));
+  assert.deepEqual(preview.books.map(({ id, name }) => ({ id, name })), [{ id: f.book.id, name: f.book.name }]);
+  assert.equal(preview.transactionCount, totalTransactions);
+  assert.equal(preview.budgetCount, 1);
+
+  let progress;
+  const result = await backup.restoreSqliteBackupFile(filename, f.directory, (completed, total) => { progress = [completed, total]; });
+  const [restored] = result.restoredBooks;
+  assert.equal(result.transactions, totalTransactions);
+  assert.equal(result.budgets, 1);
+  assert.ok(progress[0] >= totalTransactions);
+  assert.equal(progress[0], progress[1]);
+  assert.equal((await f.books.getDefaultBook()).id, f.book.id);
+  const restoredWallet = await f.db.getFirstAsync('SELECT id, balance FROM wallets WHERE book_id = ? AND name = ?', [restored.id, f.wallet.name]);
+  assert.equal(restoredWallet.balance, balance);
+  const restoredSummary = await f.db.getFirstAsync(`
+    SELECT count(*) AS count, sum(amount) AS amount, min(note) AS first_note,
+           sum(note = 'Nomor 100000') AS last_note
+    FROM transactions WHERE book_id = ? AND wallet_id = ?`, [restored.id, restoredWallet.id]);
+  assert.deepEqual(restoredSummary, { count: totalTransactions, amount: totalTransactions, first_note: 'Nomor 1', last_note: 1 });
+  assert.equal((await f.budgets.getBudgetsWithProgress(restored.id, '2026-11'))[0].spent, totalTransactions);
+  assert.equal(await f.balance(), balance);
+});
+
+test('portability: SQLite bytes reject bad backups and roll back a later restore batch', async (t) => {
+  const f = await fixture(t);
+  const backup = f.load('src/db/repositories/sqliteBackupRepo.ts');
+  await f.db.runAsync(`
+    WITH RECURSIVE numbers(n) AS (VALUES (1) UNION ALL SELECT n + 1 FROM numbers WHERE n < 105)
+    INSERT INTO transactions (book_id, wallet_id, category_id, type, amount, note, date)
+    SELECT ?, ?, ?, 'expense', 1, 'Nomor ' || n, '2026-11-24' FROM numbers
+  `, [f.book.id, f.wallet.id, f.expense.id]);
+  const bytes = await backup.createSqliteBackup();
+  assert.equal((await backup.inspectSqliteBackup(bytes)).transactionCount, 105);
+  await assert.rejects(backup.inspectSqliteBackup(new Uint8Array(100)), /Cadangan tidak valid/);
+  const filename = 'cadangan-rusak.sqlite';
+  const fullPath = path.join(f.directory, filename);
+  fs.writeFileSync(fullPath, bytes);
+  const broken = new DatabaseSync(fullPath);
+  try {
+    broken.exec('PRAGMA user_version = 999');
+    await assert.rejects(backup.inspectSqliteBackupFile(filename, f.directory), /versi cadangan/);
+    broken.exec('PRAGMA user_version = 1');
+    broken.prepare('UPDATE transactions SET category_id = ? WHERE id = 1').run(f.income.id);
+    await assert.rejects(backup.restoreSqliteBackupFile(filename, f.directory), /tidak cocok/);
+  } finally {
+    broken.close();
+  }
+
+  f.nativeDb.exec(`CREATE TRIGGER fail_sqlite_restore BEFORE INSERT ON transactions WHEN NEW.note = 'Nomor 105'
+    BEGIN SELECT RAISE(ABORT, 'simulated later batch failure'); END;`);
+  await assert.rejects(backup.restoreSqliteBackup(bytes), /simulated later batch failure/);
+  assert.equal((await f.books.getAllBooks()).length, 1);
+  assert.equal(await f.count(), 105);
+  f.nativeDb.exec('DROP TRIGGER fail_sqlite_restore');
+  assert.equal((await backup.restoreSqliteBackup(bytes)).transactions, 105);
+});
+
+test('sample transactions: seed once in a separate book and preserve its removal', async (t) => {
+  const f = await fixture(t);
+  const { createSampleTransactionsBook } = f.load('src/db/repositories/sampleTransactionsRepo.ts');
+  const sameName = await f.books.createBook('Buku Contoh');
+
+  f.nativeDb.exec(`CREATE TRIGGER fail_example_write BEFORE INSERT ON transactions WHEN NEW.note = 'Tiket bioskop'
+    BEGIN SELECT RAISE(ABORT, 'simulated sample transaction failure'); END;`);
+  await assert.rejects(createSampleTransactionsBook(), /simulated sample transaction failure/);
+  assert.equal((await f.books.getAllBooks()).length, 2);
+  assert.equal(await f.count(), 0);
+  f.nativeDb.exec('DROP TRIGGER fail_example_write');
+
+  const [created, retried] = await Promise.all([createSampleTransactionsBook(), createSampleTransactionsBook()]);
+  assert.deepEqual(created, retried);
+  assert.equal(created.name, 'Buku Contoh 2');
+  assert.equal((await f.books.getDefaultBook()).id, f.book.id);
+  assert.equal(await f.balance(), 100000);
+  assert.equal((await f.transactions.getTransactions(sameName.id)).length, 0);
+
+  const transactions = await f.transactions.getTransactions(created.id);
+  const wallets = await f.wallets.getWallets(created.id);
+  const today = f.load('src/lib/date.ts').getTodayDateString();
+  assert.equal(transactions.length, 18);
+  assert.equal(wallets.length, 3);
+  assert.equal(wallets.reduce((total, wallet) => total + wallet.balance, 0), 4222900);
+  assert.ok(transactions.every((transaction) => transaction.date.startsWith(today.slice(0, 7)) && transaction.date <= today));
+
+  for (const transaction of transactions) await f.transactions.deleteTransaction(transaction.id);
+  await f.books.deleteBook(created.id);
+  assert.equal(await createSampleTransactionsBook(), null);
+  assert.equal((await f.books.getAllBooks()).length, 2);
 });
 

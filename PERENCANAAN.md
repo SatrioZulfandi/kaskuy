@@ -472,7 +472,7 @@ flowchart TD
     T4 --> S5a["Kelola Kategori"]
     T4 --> S5b["Kelola Buku"]
     T4 --> S5c["Dashboard 8: Statistik OCR"]
-    T4 --> S5d["Export CSV"]
+    T4 --> S5d["Ekspor Excel dan Cadangan SQLite"]
     T4 --> S5e["Tema Gelap"]
     T4 --> S5f["Tentang Aplikasi"]
 ```
@@ -582,7 +582,7 @@ flowchart TD
 - [x] Tema sistem / gelap / terang tersimpan
 - [x] Kelola kategori: tambah / edit / hapus custom categories
 - [x] Kelola buku (multi-book support)
-- [x] Ekspor CSV + cadangan/pemulihan JSON keuangan; Android berbagi teks, web unduhan berkas
+- [x] Ekspor transaksi Excel dan cadangan/pemulihan SQLite.
 - [x] Onboarding screen (first launch)
 - [x] Haptic feedback melalui wrapper aman
 - [ ] Micro-animations & transitions (shared element, list animations)

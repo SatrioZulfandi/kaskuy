@@ -18,6 +18,12 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   return databasePromise;
 }
 
+/** A dedicated connection lets a backup read a consistent snapshot without blocking the writer queue. */
+export async function openDatabaseConnection(): Promise<SQLite.SQLiteDatabase> {
+  await getDatabase();
+  return SQLite.openDatabaseAsync(DATABASE_NAME, { useNewConnection: true });
+}
+
 async function initializeDatabase(): Promise<SQLite.SQLiteDatabase> {
   const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
   try {

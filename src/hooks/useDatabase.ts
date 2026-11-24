@@ -1,6 +1,7 @@
 // src/hooks/useDatabase.ts
 import { useEffect, useState } from 'react';
 import { getDatabase } from '../db/database';
+import { createSampleTransactionsBook } from '../db/repositories/sampleTransactionsRepo';
 
 export function useDatabase() {
   const [isReady, setIsReady] = useState(false);
@@ -13,6 +14,13 @@ export function useDatabase() {
     async function init() {
       try {
         await getDatabase();
+        if (__DEV__) {
+          try {
+            await createSampleTransactionsBook();
+          } catch (sampleError) {
+            console.warn('Buku Contoh belum dapat dibuat.', sampleError);
+          }
+        }
         if (mounted) {
           setIsReady(true);
         }

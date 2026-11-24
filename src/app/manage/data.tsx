@@ -1,23 +1,41 @@
-import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
-import { Platform, Pressable, SafeAreaView, ScrollView, Share, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
 import { LinearGradient } from '../../components/ui/LinearGradient';
 import { Radius, Typography, type ThemeColors } from '../../constants/theme';
-import { createFinancialBackup, exportTransactionsCsv, restoreFinancialBackup } from '../../db/repositories/backupRepo';
-import { getDefaultBook } from '../../db/repositories/bookRepo';
+import { getTransactionsForExport, type RestoredBook } from '../../db/repositories/backupRepo';
+import { getDefaultBook, setDefaultBook } from '../../db/repositories/bookRepo';
+import {
+  createSqliteBackup, createSqliteBackupFile, inspectSqliteBackup, inspectSqliteBackupFile,
+  restoreSqliteBackup, restoreSqliteBackupFile, type SqliteBackupPreview,
+} from '../../db/repositories/sqliteBackupRepo';
+import { useTheme, useThemedStyles } from '../../hooks/use-theme';
 import { useTopInset } from '../../hooks/useTopInset';
 import { getTodayDateString } from '../../lib/date';
-import { MAX_BACKUP_LENGTH, parseFinancialBackup } from '../../lib/dataPortability';
-import type { FinancialBackup } from '../../lib/dataPortability';
+import { disposeBackupFile, pickBackupFile, saveDataFile, SQLITE_MIME_TYPE, type BackupInput } from '../../lib/portabilityFiles';
+import { buildTransactionsXlsx, XLSX_MIME_TYPE } from '../../lib/transactionsXlsx';
 import type { Book } from '../../types';
 
-type ExportData = { kind: 'csv' | 'json'; content: string; filename: string };
+type DataAction = 'excel' | 'save' | 'pick' | 'restore' | 'open';
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Terjadi kesalahan. Silakan coba lagi.';
+}
+
+function fileTimestamp(): string {
+  const now = new Date();
+  const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map((part) => String(part).padStart(2, '0')).join('-');
+  return `${getTodayDateString()} ${time}`;
+}
+
+function formatBackupDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export default function ManageDataScreen() {
@@ -25,115 +43,125 @@ export default function ManageDataScreen() {
   const styles = useThemedStyles(createStyles);
   const topInset = useTopInset(12);
   const [book, setBook] = useState<Book | null>(null);
-  const [exportData, setExportData] = useState<ExportData | null>(null);
-  const [showFullExport, setShowFullExport] = useState(false);
-  const [importText, setImportText] = useState('');
-  const [review, setReview] = useState<FinancialBackup | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [action, setAction] = useState<DataAction | null>(null);
+  const [review, setReview] = useState<SqliteBackupPreview | null>(null);
+  const [restoredBooks, setRestoredBooks] = useState<RestoredBook[] | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const mounted = useRef(false);
   const working = useRef(false);
-  const focused = useRef(false);
-  const generation = useRef(0);
+  const selectedInput = useRef<BackupInput | null>(null);
+  const busy = action !== null;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (!working.current) {
+        disposeBackupFile(selectedInput.current);
+        selectedInput.current = null;
+      }
+    };
+  }, []);
 
   useFocusEffect(useCallback(() => {
-    focused.current = true;
-    generation.current++;
-    setBusy(working.current);
     let active = true;
     void getDefaultBook().then((current) => {
-      if (active) {
-        setBook(current);
-        setExportData(null);
-        if (!current) setError('Buku aktif tidak ditemukan.');
-      }
+      if (active) setBook(current);
     }).catch((reason: unknown) => { if (active) setError(message(reason)); });
-    return () => { active = false; focused.current = false; generation.current++; };
+    return () => { active = false; };
   }, []));
 
-  const generateExport = async (kind: 'csv' | 'json') => {
+  const run = async (nextAction: DataAction, work: () => Promise<void>) => {
     if (working.current) return;
-    const request = generation.current;
     working.current = true;
-    setBusy(true);
+    setAction(nextAction);
     setError(null);
     setNotice(null);
     try {
-      const current = await getDefaultBook();
-      if (!current) throw new Error('Pilih buku aktif terlebih dahulu.');
-      const content = kind === 'csv' ? await exportTransactionsCsv(current.id) : await createFinancialBackup();
-      if (focused.current && request === generation.current) {
-        setBook(current);
-        setShowFullExport(false);
-        setExportData({ kind, content, filename: `kaskuy-${kind === 'csv' ? `transaksi-${current.id}` : 'cadangan'}-${getTodayDateString()}.${kind}` });
+      await work();
+    } catch (reason) {
+      if (mounted.current) setError(message(reason));
+    } finally {
+      working.current = false;
+      if (mounted.current) {
+        setAction(null);
+        setProgress(null);
+      } else {
+        disposeBackupFile(selectedInput.current);
+        selectedInput.current = null;
       }
-    } catch (reason) {
-      if (focused.current && request === generation.current) setError(message(reason));
-    } finally {
-      working.current = false;
-      if (focused.current) setBusy(false);
     }
   };
 
-  const shareExport = async () => {
-    if (!exportData || working.current) return;
-    const request = generation.current;
-    working.current = true;
-    setBusy(true);
-    setError(null);
-    try {
-      await Share.share({ title: exportData.filename, message: exportData.content }, { dialogTitle: `Bagikan ${exportData.filename}` });
-    } catch (reason) {
-      if (focused.current && request === generation.current) setError(`${message(reason)} Anda juga dapat menyalin teks pratinjau.`);
-    } finally {
-      working.current = false;
-      if (focused.current) setBusy(false);
+  const save = (kind: 'excel' | 'save') => run(kind, async () => {
+    const timestamp = fileTimestamp();
+    const filename = kind === 'excel' ? `Transaksi KASKUY - ${timestamp}.xlsx` : `Cadangan KASKUY - ${timestamp}.sqlite`;
+    if (kind === 'excel' && !book) throw new Error('Pilih buku aktif terlebih dahulu.');
+    const saved = kind === 'excel' && book
+      ? await saveDataFile(filename, XLSX_MIME_TYPE, {
+        bytes: async () => buildTransactionsXlsx((await getTransactionsForExport(book.id)).transactions),
+      })
+      : await saveDataFile(filename, SQLITE_MIME_TYPE, {
+        bytes: createSqliteBackup,
+        writeToCache: createSqliteBackupFile,
+      });
+    if (saved && mounted.current) {
+      setNotice(Platform.OS === 'web' ? `Unduhan ${filename} dimulai.` : `${filename} tersimpan di folder yang dipilih.`);
     }
+  });
+
+  const clearReview = () => {
+    disposeBackupFile(selectedInput.current);
+    selectedInput.current = null;
+    setReview(null);
   };
 
-  const downloadExport = () => {
-    if (!exportData || Platform.OS !== 'web' || typeof document === 'undefined') return;
-    const blob = new Blob([exportData.content], { type: exportData.kind === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = exportData.filename;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
-  const inspectBackup = () => {
-    if (working.current) return;
-    setError(null);
-    setNotice(null);
+  const chooseBackup = () => run('pick', async () => {
+    clearReview();
+    const input = await pickBackupFile();
+    if (!input) return;
     try {
-      setReview(parseFinancialBackup(importText));
-    } catch (reason) {
-      setReview(null);
-      setError(message(reason));
-    }
-  };
-
-  const restoreBackup = async () => {
-    if (!review || working.current) return;
-    const request = generation.current;
-    working.current = true;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await restoreFinancialBackup(importText);
-      if (focused.current && request === generation.current) {
-        setImportText('');
-        setReview(null);
-        setExportData(null);
-        setNotice(`${result.books} buku, ${result.wallets} dompet, ${result.transactions} transaksi, dan ${result.budgets} budget berhasil dipulihkan. Pilih buku hasil pemulihan melalui Kelola Buku.`);
+      if (!mounted.current) return;
+      const summary = input.kind === 'sqlite-file'
+        ? await inspectSqliteBackupFile(input.filename, input.directory)
+        : await inspectSqliteBackup(input.bytes);
+      if (mounted.current) {
+        selectedInput.current = input;
+        setReview(summary);
+        setRestoredBooks(null);
       }
-    } catch (reason) {
-      if (focused.current && request === generation.current) setError(message(reason));
     } finally {
-      working.current = false;
-      if (focused.current) setBusy(false);
+      if (selectedInput.current !== input) disposeBackupFile(input);
     }
+  });
+
+  const restore = () => run('restore', async () => {
+    const input = selectedInput.current;
+    if (!input) return;
+    const reportProgress = (completed: number, total: number) => {
+      if (mounted.current) setProgress(total > 0 ? Math.floor(completed / total * 100) : 0);
+    };
+    const result = input.kind === 'sqlite-file'
+      ? await restoreSqliteBackupFile(input.filename, input.directory, reportProgress)
+      : await restoreSqliteBackup(input.bytes, reportProgress);
+    if (mounted.current) {
+      clearReview();
+      setRestoredBooks(result.restoredBooks);
+      setNotice(`${result.books} buku, ${result.wallets} dompet, ${result.transactions} transaksi, dan ${result.budgets} anggaran berhasil dipulihkan.`);
+    }
+  });
+
+  const openRestored = () => {
+    if (restoredBooks?.length !== 1) {
+      router.push('/manage/books');
+      return;
+    }
+    void run('open', async () => {
+      await setDefaultBook(restoredBooks[0].id);
+      if (mounted.current) router.dismissTo('/(tabs)');
+    });
   };
 
   return (
@@ -144,62 +172,51 @@ export default function ManageDataScreen() {
           <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Kembali" style={styles.backButton}>
             <Icon name="chevLeft" color="#FFFFFF" size={22} />
           </Pressable>
-          <Text style={styles.headerTitle}>Ekspor & Cadangan</Text>
+          <Text style={styles.headerTitle}>Ekspor &amp; Cadangan</Text>
         </View>
-        <Text style={styles.headerSubtitle}>Simpan salinan data dan pulihkan ke buku baru</Text>
+        <Text style={styles.headerSubtitle}>Simpan transaksi atau pulihkan data keuangan</Text>
       </LinearGradient>
       <ScrollView style={styles.body} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-        {notice ? <Text accessibilityRole="alert" style={styles.success}>{notice}</Text> : null}
-        <View style={styles.card}>
-          <Text style={styles.title}>Ekspor Transaksi CSV</Text>
-          <Text style={styles.description}>Seluruh transaksi buku aktif: {book?.name || 'memuat...'}. Cocok untuk dibuka di aplikasi spreadsheet.</Text>
-          <Button title="Siapkan CSV" variant="secondary" disabled={busy || !book} onPress={() => { void generateExport('csv'); }} />
-        </View>
-        <View style={styles.card}>
-          <Text style={styles.title}>Cadangan Semua Buku</Text>
-          <Text style={styles.description}>Cadangan JSON memuat buku, dompet, saldo, kategori, transaksi, dan budget. Foto struk, hasil OCR, serta preferensi tampilan tidak disertakan.</Text>
-          <Button title="Siapkan Cadangan JSON" variant="secondary" disabled={busy} onPress={() => { void generateExport('json'); }} />
-        </View>
-        {exportData ? (
-          <View style={styles.card}>
-            <Text style={styles.title}>{exportData.filename}</Text>
-            <Text style={styles.description}>
-              {Platform.OS === 'web' ? 'Unduh berkas atau bagikan teksnya.' : 'Bagikan sebagai teks, lalu simpan melalui aplikasi pilihan Anda. Teks juga dapat dipilih dan disalin di bawah.'}
-            </Text>
-            <Button title={exportData.kind === 'csv' ? 'Bagikan CSV' : 'Bagikan Cadangan JSON'} disabled={busy} loading={busy} onPress={() => { void shareExport(); }} />
-            {Platform.OS === 'web' ? <Button title="Unduh Berkas" variant="outline" disabled={busy} onPress={downloadExport} /> : null}
-            <ScrollView style={styles.preview} nestedScrollEnabled>
-              <Text selectable style={styles.code}>{showFullExport ? exportData.content : exportData.content.slice(0, 5000)}</Text>
-            </ScrollView>
-            {exportData.content.length > 5000 ? (
-              <Button title={showFullExport ? 'Ringkas Pratinjau' : 'Tampilkan Semua Teks untuk Disalin'} variant="outline" size="sm" onPress={() => setShowFullExport(!showFullExport)} />
-            ) : null}
-          </View>
+        {notice ? <Text accessibilityLiveRegion="polite" style={styles.success}>{notice}</Text> : null}
+        {restoredBooks ? (
+          <Button title={restoredBooks.length === 1 ? 'Buka Buku Pulihan' : 'Pilih Buku di Kelola Buku'}
+            disabled={busy} loading={action === 'open'} onPress={openRestored} />
         ) : null}
         <View style={styles.card}>
-          <Text style={styles.title}>Pulihkan Cadangan JSON</Text>
-          <Text style={styles.description}>Tempel isi cadangan lengkap. Data ditambahkan sebagai buku baru bertanda “Pemulihan”; data dan buku aktif saat ini tetap tersedia.</Text>
-          <TextInput
-            accessibilityLabel="Isi cadangan JSON"
-            value={importText}
-            onChangeText={(value) => { setImportText(value); setReview(null); }}
-            editable={!busy}
-            multiline
-            autoCapitalize="none"
-            autoCorrect={false}
-            maxLength={MAX_BACKUP_LENGTH}
-            placeholder="Tempel JSON cadangan Kaskuy di sini"
-            placeholderTextColor={colors.textMuted}
-            style={styles.importInput}
-          />
-          <Button title="Periksa Cadangan" variant="outline" disabled={busy || !importText.trim()} onPress={inspectBackup} />
+          <Text style={styles.title}>Ekspor Transaksi</Text>
+          <Text style={styles.description}>
+            {book ? `Simpan seluruh transaksi dari buku ${book.name} sebagai file Excel.` : 'Simpan seluruh transaksi buku aktif sebagai file Excel.'}
+          </Text>
+          <Button title="Ekspor ke Excel" variant="secondary" disabled={busy || !book}
+            loading={action === 'excel'} onPress={() => { void save('excel'); }} />
+        </View>
+        <View style={styles.card}>
+          <Text style={styles.title}>Cadangkan Semua Buku</Text>
+          <Text style={styles.description}>Simpan buku, dompet dan saldo, kategori, transaksi, serta anggaran untuk dipulihkan nanti.</Text>
+          {Platform.OS === 'android' ? <Text style={styles.description}>Pilih folder seperti Dokumen. Untuk pindah HP, Anda bisa memindahkan file cadangan ke Google Drive dari aplikasi File.</Text> : null}
+          <Button title="Simpan Cadangan" variant="secondary" disabled={busy}
+            loading={action === 'save'} onPress={() => { void save('save'); }} />
+        </View>
+        <View style={styles.card}>
+          <Text style={styles.title}>Pulihkan Cadangan</Text>
+          <Text style={styles.description}>Pilih file cadangan KASKUY (.sqlite) dan periksa isinya sebelum memulihkan data ke buku baru.</Text>
+          <Button title="Pilih File Cadangan" variant="secondary" disabled={busy}
+            loading={action === 'pick'} onPress={() => { void chooseBackup(); }} />
           {review ? (
             <View style={styles.review}>
-              <Text style={styles.title}>Cadangan Valid</Text>
-              <Text style={styles.description}>{review.books.length} buku · {review.wallets.length} dompet · {review.transactions.length} transaksi · {review.budgets.length} budget</Text>
-              <Text style={styles.description}>Buku: {review.books.map((item) => item.name).join(', ')}</Text>
-              <Button title="Pulihkan sebagai Buku Baru" disabled={busy} loading={busy} onPress={() => { void restoreBackup(); }} />
+              <Text style={styles.title}>Cadangan {formatBackupDate(review.createdAt)}</Text>
+              <Text style={styles.description}>
+                {review.books.length} buku · {review.walletCount} dompet · {review.transactionCount} transaksi · {review.budgetCount} anggaran
+              </Text>
+              <Text style={styles.description}>{review.books.map((item) => item.name).join(', ')}</Text>
+              {progress !== null ? (
+                <Text accessibilityLiveRegion="polite" style={styles.description}>
+                  Memulihkan data… {progress}%
+                </Text>
+              ) : null}
+              <Button title="Pulihkan Data" disabled={busy} loading={action === 'restore'}
+                onPress={() => { void restore(); }} />
             </View>
           ) : null}
         </View>
@@ -222,8 +239,5 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   description: { color: colors.textSecondary, fontSize: 13, lineHeight: 20 },
   error: { color: colors.danger, backgroundColor: colors.dangerLight, padding: 14, borderRadius: Radius.sm },
   success: { color: colors.text, backgroundColor: colors.successLight, padding: 14, borderRadius: Radius.sm, lineHeight: 20 },
-  preview: { maxHeight: 230, padding: 12, backgroundColor: colors.background, borderRadius: Radius.sm },
-  code: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: colors.text, lineHeight: 17 },
-  importInput: { minHeight: 170, maxHeight: 300, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.sm, padding: 12, textAlignVertical: 'top', color: colors.text, fontSize: 12 },
-  review: { gap: 12, paddingTop: 8 },
+  review: { gap: 12, padding: 12, borderRadius: Radius.sm, backgroundColor: colors.background },
 });
